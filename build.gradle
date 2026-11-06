@@ -15,7 +15,7 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"template-mod" {
+		"redstonelogics" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
@@ -77,5 +77,30 @@ publishing {
 		// Notice: This block does NOT have the same function as the block in the top level.
 		// The repositories here will be used for publishing your artifact, not for
 		// retrieving dependencies.
+	}
+}
+
+// Runs the analysis against hand-built snapshots. No Minecraft, no JUnit.
+tasks.register('selfTest', JavaExec) {
+	group = 'verification'
+	description = 'Builds known circuits in memory and checks what the mapper makes of them.'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.redstonelogics.SelfTest'
+}
+
+// The companion app, without the Minecraft-facing classes.
+tasks.register('desktopJar', Jar) {
+	group = 'build'
+	description = 'Standalone companion app jar.'
+	archiveClassifier = 'desktop'
+	from sourceSets.main.output
+	exclude 'com/redstonelogics/scanner/**'
+	exclude 'com/redstonelogics/command/**'
+	exclude 'com/redstonelogics/selection/**'
+	exclude 'com/redstonelogics/RedstoneLogicsMod.class'
+	exclude 'assets/**'
+	exclude 'fabric.mod.json'
+	manifest {
+		attributes 'Main-Class': 'com.redstonelogics.desktop.DesktopApp'
 	}
 }

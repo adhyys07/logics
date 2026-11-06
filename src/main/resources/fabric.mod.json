@@ -1,34 +1,21 @@
 {
 	"schemaVersion": 1,
-	"id": "template-mod",
+	"id": "redstonelogics",
 	"version": "${version}",
-	"name": "Template Mod",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"name": "RedstoneLogics",
+	"description": "Scans a redstone build and turns it into a logic gate diagram: SVG or PNG schematics, a Markdown netlist report, and a generated Arduino sketch. Recognises NOT, AND, OR, NAND, NOR, XOR, XNOR, inhibit gates and SR latches.",
 	"authors": [
-		"Me!"
+		"Adhdhyan Jain"
 	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
+	"contact": {},
 	"license": "CC0-1.0",
-	"icon": "assets/template-mod/icon.png",
+	"icon": "assets/redstonelogics/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.example.TemplateMod"
-		],
-		"client": [
-			"com.example.client.TemplateModClient"
+			"com.redstonelogics.RedstoneLogicsMod"
 		]
 	},
-	"mixins": [
-		"template-mod.mixins.json",
-		{
-			"config": "template-mod.client.mixins.json",
-			"environment": "client"
-		}
-	],
 	"depends": {
 		"fabricloader": ">=0.20.1",
 		"minecraft": "~26.3",
