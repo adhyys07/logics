@@ -101,7 +101,7 @@ public final class SvgExporter {
             case INPUT, OUTPUT, CONST_0, CONST_1 -> {
                 sb.append(String.format(Locale.ROOT,
                         "  <rect class=\"term\" x=\"%.1f\" y=\"%.1f\" width=\"%.1f\" height=\"%.1f\""
-                                + " rx=\"10\"/>%n", x, y + h / 2 - 15, w, 30));
+                                + " rx=\"10\"/>%n", x, y + h / 2 - 15, w, 30.0));
                 text(sb, "lbl", x + w / 2, y + h / 2 + 4, g.label, "middle");
                 return;
             }

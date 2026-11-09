@@ -166,16 +166,16 @@ public final class DiagramLayout {
         double ty = end[1];
         if (tx - sx > 2 * STUB) {
             double mid = (sx + tx) / 2;
-            return new double[] { sx, sy, mid, sy, ty,tx, ty};
-    }
-    double over = MARGIN / 2;
-    return new double[] {
-        sx, sy,
-        sx + STUB, sy,
-        sx + STUB, over,
-        tx - STUB, over,
-        tx - STUB, ty,
-        tx, ty };
+            return new double[] { sx, sy, mid, sy, mid, ty, tx, ty };
+        }
+        double over = MARGIN / 2;
+        return new double[] {
+                sx, sy,
+                sx + STUB, sy,
+                sx + STUB, over,
+                tx - STUB, over,
+                tx - STUB, ty,
+                tx, ty };
     }
 
     public double[] outputPin(int gate, int pin) {
