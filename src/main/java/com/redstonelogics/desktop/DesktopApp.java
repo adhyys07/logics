@@ -1,13 +1,16 @@
 package com.redstonelogics.desktop;
 
 import com.redstonelogics.core.RegionSnapshot;
+import com.redstonelogics.core.SchematicImporter;
 import com.redstonelogics.export.ArduinoExporter;
 import com.redstonelogics.export.CsvExporter;
 import com.redstonelogics.export.DiagramLayout;
 import com.redstonelogics.export.DiagramPainter;
 import com.redstonelogics.export.DotExporter;
 import com.redstonelogics.export.NetlistReport;
+import com.redstonelogics.export.DiagramJsonExporter;
 import com.redstonelogics.export.KiCadExporter;
+import com.redstonelogics.export.LogisimExporter;
 import com.redstonelogics.export.PngExporter;
 import com.redstonelogics.export.SvgExporter;
 import com.redstonelogics.export.VerilogExporter;
@@ -35,6 +38,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Locale;
 
 public final class DesktopApp extends JFrame {
 
@@ -91,6 +95,10 @@ public final class DesktopApp extends JFrame {
             () -> CsvExporter.render(mapped).getBytes(StandardCharsets.UTF_8))));
         file.add(item("Export Mermaid...", () -> save("mmd", "Mermaid flowchart",
             () -> DotExporter.mermaid(mapped.diagram()).getBytes(StandardCharsets.UTF_8))));
+        file.add(item("Export graph JSON...", () -> save("json", "Circuit graph",
+            () -> DiagramJsonExporter.render(mapped, title).getBytes(StandardCharsets.UTF_8))));
+        file.add(item("Export Logisim...", () -> save("circ", "Logisim circuit",
+            () -> LogisimExporter.render(mapped.diagram(), title).getBytes(StandardCharsets.UTF_8))));
         file.add(item("Export KiCad netlist...", () -> save("net", "KiCad netlist",
             () -> KiCadExporter.render(mapped.diagram(), title).getBytes(StandardCharsets.UTF_8))));
 
@@ -123,14 +131,18 @@ public final class DesktopApp extends JFrame {
 
     private void open() {
         JFileChooser chooser = new JFileChooser();
-        chooser.setFileFilter(new FileNameExtensionFilter("Snapshot (*.json)", "json"));
+        chooser.setFileFilter(new FileNameExtensionFilter(
+                "Snapshot or schematic (*.json, *.schem)", "json", "schem"));
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
             return;
         }
         File f = chooser.getSelectedFile();
         try {
-            RegionSnapshot snapshot = RegionSnapshot.fromJson(
-                    Files.readString(f.toPath(), StandardCharsets.UTF_8));
+            // A .schem is gzipped NBT; a snapshot is our own JSON.
+            RegionSnapshot snapshot = f.getName().toLowerCase(Locale.ROOT).endsWith(".schem")
+                    ? SchematicImporter.read(Files.readAllBytes(f.toPath()), f.getName())
+                    : RegionSnapshot.fromJson(
+                            Files.readString(f.toPath(), StandardCharsets.UTF_8));
             mapped = RedstoneLogicMapper.map(snapshot);
             title = f.getName() + "  " + mapped.summary();
             setTitle("RedstoneLogics - " + f.getName());

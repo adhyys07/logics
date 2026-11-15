@@ -9,7 +9,9 @@ import com.redstonelogics.core.Pos;
 import com.redstonelogics.core.RegionSnapshot;
 import com.redstonelogics.core.ScannedBlock;
 import com.redstonelogics.export.DiagramPainter;
+import com.redstonelogics.export.DiagramJsonExporter;
 import com.redstonelogics.export.KiCadExporter;
+import com.redstonelogics.export.LogisimExporter;
 import com.redstonelogics.export.NetlistReport;
 import com.redstonelogics.export.PngExporter;
 import com.redstonelogics.export.SvgExporter;
@@ -145,6 +147,8 @@ public final class SelfTest {
         write(c.name() + ".snapshot.json", c.snapshot().toJson());
         write(c.name() + ".report.md", NetlistReport.render(mapped, title));
         write(c.name() + ".net", KiCadExporter.render(mapped.diagram(), c.name()));
+        write(c.name() + ".graph.json", DiagramJsonExporter.render(mapped, title));
+        write(c.name() + ".circ", LogisimExporter.render(mapped.diagram(), title));
         write(c.name() + ".svg",
                 SvgExporter.render(mapped.diagram(), title, criticalGates(mapped)));
         Files.write(OUT.resolve(c.name() + ".png"),

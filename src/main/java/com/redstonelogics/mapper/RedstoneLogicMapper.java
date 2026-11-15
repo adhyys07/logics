@@ -4,6 +4,7 @@ import com.redstonelogics.analysis.BooleanAbstraction;
 import com.redstonelogics.core.RegionSnapshot;
 import com.redstonelogics.graph.Netlist;
 import com.redstonelogics.graph.NetlistExtractor;
+import com.redstonelogics.graph.NetlistPasses;
 import com.redstonelogics.recognize.GateRecognizer;
 import com.redstonelogics.recognize.LogicDiagram;
 
@@ -24,6 +25,10 @@ public final class RedstoneLogicMapper {
 
     public static RedstoneLogicMapper map(RegionSnapshot snapshot) {
         Netlist netlist = NetlistExtractor.extract(snapshot);
+        // Cleanup before anything reads the graph. dedupLinks in particular is
+        // not cosmetic: duplicate links make one driver look like several
+        // independent inputs, and inflate in-degree in TimingAnalysis.
+        NetlistPasses.optimise(netlist);
         BooleanAbstraction logic = BooleanAbstraction.of(netlist);
         LogicDiagram diagram = GateRecognizer.recognize(logic);
         return new RedstoneLogicMapper(snapshot, netlist, logic, diagram);

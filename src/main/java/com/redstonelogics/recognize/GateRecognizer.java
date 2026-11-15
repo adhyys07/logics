@@ -50,6 +50,12 @@ public final class GateRecognizer {
         r.fillSinks();
         r.detectAnalogEquality();
         r.carryDiagnostics();
+        // Composite designs last: they are found structurally over the gates
+        // the passes above have already identified.
+        for (SubgraphMatcher.Match m : SubgraphMatcher.findAll(
+                r.diagram, GatePattern.library())) {
+            r.diagram.recordPattern(m.describe(r.diagram));
+        }
         return r.diagram;
     }
 

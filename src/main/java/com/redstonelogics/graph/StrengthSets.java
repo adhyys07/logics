@@ -23,9 +23,9 @@ public final class StrengthSets {
     private void run() {
         for (Netlist.Element e : netlist.elements()) {
             sets[e.id] = switch (e.kind) {
-                case INPUT -> FULL;                 // a lever is off or full
-                case CONSTANT -> 1 << 15;           // a block of redstone
-                default -> OFF;                     // grown below
+                case INPUT -> FULL;                
+                case CONSTANT -> 1 << 15;           
+                default -> OFF;                     
             };
         }
 
@@ -114,7 +114,11 @@ public final class StrengthSets {
     }
 
     public boolean isDigital(int elementId) {
-        return (sets[elementId] & ~FULL) == 0;
+        // One non-zero level is still just on or off, whatever that level is: a
+        // lamp fed at strength 13 behaves no differently from one fed at 15.
+        // Analog means two or more distinct non-zero strengths, which is what a
+        // comparator doing arithmetic produces.
+        return Integer.bitCount(sets[elementId] & ~1) <= 1;
     }
 
     public List<Netlist.Element> analogElements() {
@@ -126,7 +130,7 @@ public final class StrengthSets {
         }
         return out;
     }
-    
+
     public static int pruneUnreachable(Netlist netlist, StrengthSets sets) {
         int removed = 0;
         for (Netlist.Element e : netlist.elements()) {

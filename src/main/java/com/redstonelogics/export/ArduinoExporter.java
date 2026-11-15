@@ -65,6 +65,26 @@ public final class ArduinoExporter {
             sb.append('\n');
         }
 
+        // Delay state, one set per gate that accumulated repeater ticks.
+        List<LogicDiagram.Gate> delayed = new ArrayList<>();
+        for (LogicDiagram.Gate g : diagram.gates()) {
+            if (g.delayTicks > 0) {
+                delayed.add(g);
+            }
+        }
+        for (LogicDiagram.Gate g : delayed) {
+            String n = names.get(g.id);
+            sb.append(String.format(Locale.ROOT,
+                    "unsigned long %s_t = 0;   // when the pending change was seen%n", n));
+            sb.append(String.format(Locale.ROOT,
+                    "bool %s_p = false;        // pending target%n", n));
+            sb.append(String.format(Locale.ROOT,
+                    "bool %s_q = false;        // delayed output%n", n));
+        }
+        if (!delayed.isEmpty()) {
+            sb.append(System.lineSeparator());
+        }
+
         sb.append("void setup() {\n");
         for (LogicDiagram.Gate g : inputs) {
             sb.append("  pinMode(PIN_").append(identifier(g.label).toUpperCase(Locale.ROOT))
@@ -99,23 +119,47 @@ public final class ArduinoExporter {
                 }
                 case OUTPUT -> {
                     String source = g.inputs.isEmpty() ? "false" : names.get(g.inputs.get(0).gate());
+                    if (g.delayTicks > 0) {
+                        emitDelayed(sb, names.get(id), source, g.delayTicks);
+                        source = names.get(id);
+                    }
                     sb.append(String.format(Locale.ROOT, "  digitalWrite(PIN_%s, %s ? HIGH : LOW);%n",
                             identifier(g.label).toUpperCase(Locale.ROOT), source));
                 }
                 default -> {
                     if (g.delayTicks > 0) {
-                        sb.append(String.format(Locale.ROOT,
-                                "  // %d redstone tick(s) of delay here (%d ms) - not reproduced%n",
-                                g.delayTicks, g.delayTicks * 100));
+                        emitDelayed(sb, names.get(id), expression(g, names), g.delayTicks);
+                    } else {
+                        sb.append(String.format(Locale.ROOT, "  bool %s = %s;%n",
+                                names.get(id), expression(g, names)));
                     }
-                    sb.append(String.format(Locale.ROOT, "  bool %s = %s;%n",
-                            names.get(id), expression(g, names)));
                 }
             }
         }
 
         sb.append("}\n");
         return sb.toString();
+    }
+
+    /**
+     * A repeater as a non-blocking delay. A change restarts the timer and is
+     * committed once the period elapses, which also reproduces a repeater
+     * swallowing a pulse shorter than its own delay.
+     *
+     * <p>Deliberately not Arduino's delay(): that would stall every other gate
+     * in the same loop() pass.
+     */
+    private static void emitDelayed(StringBuilder sb, String name, String expr, int ticks) {
+        long ms = ticks * 100L;
+        sb.append(String.format(Locale.ROOT, "  bool %s_raw = %s;%n", name, expr));
+        sb.append(String.format(Locale.ROOT,
+                "  if (%s_raw != %s_p) { %s_p = %s_raw; %s_t = millis(); }%n",
+                name, name, name, name, name));
+        sb.append(String.format(Locale.ROOT,
+                "  if (%s_q != %s_p && millis() - %s_t >= %dUL) { %s_q = %s_p; }%n",
+                name, name, name, ms, name, name));
+        sb.append(String.format(Locale.ROOT,
+                "  bool %s = %s_q;  // %d redstone tick(s)%n", name, name, ticks));
     }
 
     private static void emitLatch(StringBuilder sb, LogicDiagram diagram,
