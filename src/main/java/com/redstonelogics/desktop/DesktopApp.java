@@ -2,11 +2,14 @@ package com.redstonelogics.desktop;
 
 import com.redstonelogics.core.RegionSnapshot;
 import com.redstonelogics.export.ArduinoExporter;
+import com.redstonelogics.export.CsvExporter;
 import com.redstonelogics.export.DiagramLayout;
 import com.redstonelogics.export.DiagramPainter;
+import com.redstonelogics.export.DotExporter;
 import com.redstonelogics.export.NetlistReport;
 import com.redstonelogics.export.PngExporter;
 import com.redstonelogics.export.SvgExporter;
+import com.redstonelogics.export.VerilogExporter;
 import com.redstonelogics.mapper.RedstoneLogicMapper;
 
 import javax.imageio.ImageIO;
@@ -78,6 +81,14 @@ public final class DesktopApp extends JFrame {
         file.add(item("Export report...", () -> save("md", "Markdown report",
                 () -> NetlistReport.render(mapped, title).getBytes(StandardCharsets.UTF_8))));
         bar.add(file);
+
+        file.add(item("Export Verilog...", () -> save("v", "Verilog module",
+            () -> VerilogExporter.render(mapped, "circuit").getBytes(StandardCharsets.UTF_8))));
+        file.add(item("Export Graphviz...", () -> save("dot", "Graphviz DOT",
+            () -> DotExporter.dot(mapped.diagram(), title).getBytes(StandardCharsets.UTF_8))));
+        file.add(item("Export truth table...", () -> save("csv", "Truth table",
+            () -> CsvExporter.render(mapped).getBytes(StandardCharsets.UTF_8))));
+
 
         JMenu view = new JMenu("View");
         view.add(item("Toggle dark background", () -> {

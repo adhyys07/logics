@@ -23,9 +23,11 @@ import java.util.Map;
  *   <li>Dust connects to horizontally adjacent dust, to dust one step up if the
  *       block above the lower dust is not solid, and to dust one step down if the
  *       block above the lower dust is not solid.</li>
- *   <li>Dust weakly powers the block directly below it, and the blocks it is
- *       connected towards - so a wire running <em>past</em> a block does not
- *       power it.</li>
+ *   <li>Dust weakly powers the block directly below it, and the blocks it
+ *       points towards - its connections, plus the far side of a wire with a
+ *       single connection, since that renders as a straight line. So a wire
+ *       <em>ending</em> at a block powers it, while one running <em>past</em>
+ *       it does not.</li>
  *   <li>Torches, levers, buttons, repeaters and comparators strongly power one
  *       block each (above, into the support, out of the front). A powered block
  *       re-emits at its own strength into adjacent dust.</li>
@@ -187,6 +189,33 @@ public final class PowerModel {
         return dust.getOrDefault(p, 0);
     }
 
+    /**
+     * Does the dust at {@code dustPos} deliver power in direction {@code d}?
+     *
+     * <p>A connection always delivers. On top of that, dust with exactly one
+     * connection renders as a straight line rather than a stub, so it also
+     * points out of its far side - which is what lets a wire running into a
+     * block power that block. Dust with no connections at all is a dot and
+     * powers only the block beneath it.
+     */
+    public boolean dustPointsTowards(Pos dustPos, Direction d) {
+        if (!d.horizontal() || snap.kindAt(dustPos) != BlockKind.DUST) {
+            return false;
+        }
+        if (dustConnectsTowards(dustPos, d)) {
+            return true;
+        }
+        Direction only = null;
+        int count = 0;
+        for (Direction h : Direction.HORIZONTAL) {
+            if (dustConnectsTowards(dustPos, h)) {
+                only = h;
+                count++;
+            }
+        }
+        return count == 1 && only == d.opposite();
+    }
+
     /** Does the dust at {@code dustPos} have a connection pointing in {@code d}? */
     public boolean dustConnectsTowards(Pos dustPos, Direction d) {
         if (!d.horizontal() || snap.kindAt(dustPos) != BlockKind.DUST) {
@@ -204,12 +233,15 @@ public final class PowerModel {
             case TORCH:
             case LEVER:
             case BUTTON:
-            case LAMP:
-            case MECHANISM:
             case REDSTONE_BLOCK:
                 return true;
+            case LAMP:
+            case MECHANISM:
             case SOLID:
-                // Dust climbing this block's side, if this cell is not capped.
+                // None of these emit a signal, so dust never turns to face them.
+                // The only connection is dust climbing the side, if this cell is
+                // not capped. They are still powered by dust pointing into them,
+                // which dustPointsTowards handles.
                 return snap.kindAt(n.up()) == BlockKind.DUST && !snap.at(dustPos.up()).isSolid();
             case AIR:
             default:
@@ -225,7 +257,7 @@ public final class PowerModel {
         }
         for (Direction d : Direction.HORIZONTAL) {
             Pos n = blockPos.offset(d);
-            if (snap.kindAt(n) == BlockKind.DUST && dustConnectsTowards(n, d.opposite())) {
+            if (snap.kindAt(n) == BlockKind.DUST && dustPointsTowards(n, d.opposite())) {
                 best = Math.max(best, dustAt(n));
             }
         }
@@ -249,7 +281,7 @@ public final class PowerModel {
         Pos n = componentPos.offset(towards);
         ScannedBlock b = snap.at(n);
         return switch (b.kind()) {
-            case DUST -> dustConnectsTowards(n, towards.opposite()) ? dustAt(n) : 0;
+            case DUST -> dustPointsTowards(n, towards.opposite()) ? dustAt(n) : 0;
             case REPEATER, COMPARATOR ->
                     b.facing() == towards.opposite() ? driverOutputs.getOrDefault(n, 0) : 0;
             case TORCH, LEVER, BUTTON, REDSTONE_BLOCK -> driverOutputs.getOrDefault(n, 0);
