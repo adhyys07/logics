@@ -132,7 +132,8 @@ public final class GateRecognizer {
             }
             String label = declared ? e.label : "Y*" + implicit++;
             LogicDiagram.Gate g = diagram.add(GateType.OUTPUT, label, e.pos);
-            g.elements.add(e.id);
+            // The element itself, plus any buffers behind it, are collected
+            // in wireSinks via collectAbsorbed so repeater delay survives.
             if (dangling) {
                 g.note = "Implicit output: nothing in the selection reads " + e.label + ".";
             } else {
@@ -186,6 +187,7 @@ public final class GateRecognizer {
         for (int[] sink : sinks) {
             Netlist.Element e = netlist.element(sink[0]);
             LogicDiagram.Gate g = diagram.gate(sink[1]);
+            collectAbsorbed(sink[0], g);
             Fn fn = ba.function(e.id);
             LogicDiagram.Ref ref = emitUnlessFalse(fn, e.pos);
             if (ref != null) {
@@ -344,6 +346,9 @@ public final class GateRecognizer {
         }
         if (t.equals(and.not())) {
             return new Match(GateType.NAND, identity);
+        }
+        if (t.equals(or.not())) {
+            return new Match(GateType.NOR, identity);
         }
 
         if (t.equals(xor)) {

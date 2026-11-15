@@ -13,6 +13,7 @@ import com.redstonelogics.export.PngExporter;
 import com.redstonelogics.export.SvgExporter;
 import com.redstonelogics.graph.Netlist;
 import com.redstonelogics.mapper.RedstoneLogicMapper;
+import com.redstonelogics.recognize.GateType;
 import com.redstonelogics.recognize.LogicDiagram;
 
 import java.io.IOException;
@@ -35,6 +36,17 @@ public final class SelfTest {
 
     private static final Path OUT = Path.of("build", "selftest");
 
+    /**
+     * The gate type each circuit must actually be recognised as. The function
+     * check alone cannot catch a mislabelled gate: NOR and "NOT A AND NOT B"
+     * are the same function, so a NOR reported as GENERIC still passes it.
+     */
+    private static final Map<String, GateType> EXPECTED_TYPE = Map.of(
+            "not_gate", GateType.NOT,
+            "or_gate", GateType.OR,
+            "nor_gate", GateType.NOR,
+            "torch_and", GateType.AND);
+
     // ------------------------------------------------------------------ harness
 
     /** One circuit plus the logic it is supposed to implement. */
@@ -51,7 +63,7 @@ public final class SelfTest {
         Files.createDirectories(OUT);
 
         List<Case> cases = List.of(
-                notGate(), orGate(), repeaterDelay(), torchAnd(),
+                notGate(), orGate(), norGate(), repeaterDelay(), torchAnd(),
                 lampBypass(), lampUnderWire());
 
         int failed = 0;
@@ -109,6 +121,13 @@ public final class SelfTest {
         }
 
         boolean ok = verify(mapped, c);
+
+        GateType wantType = EXPECTED_TYPE.get(c.name());
+        if (wantType != null && !mapped.diagram().tally().containsKey(wantType)) {
+            System.out.println("  expected a " + wantType.shortName
+                    + " gate; tally is " + mapped.diagram().tally());
+            ok = false;
+        }
 
         String title = c.name() + "  " + mapped.summary();
         write(c.name() + ".snapshot.json", c.snapshot().toJson());
@@ -206,6 +225,25 @@ public final class SelfTest {
     }
 
     /** Two levers feeding one dust net: redstone merges with max, so the net is an OR. */
+    /**
+     * Two levers powering one support block, inverted by a torch. Several
+     * inputs into a single torch is the most common multi-input gate in
+     * redstone, and it is a NOR.
+     */
+    private static Case norGate() {
+        Build b = new Build();
+        b.solid(0, 0, 0);                        // support block both levers power
+        b.lever(0, 1, 0, Direction.DOWN);        // input A, mounted on top
+        b.lever(-1, 0, 0, Direction.EAST);       // input B, on the west face
+        b.torch(1, 0, 0, Direction.WEST);        // inverts the support block
+        b.solid(2, -1, 0).solid(3, -1, 0);       // floor under the dust
+        b.dust(2, 0, 0).dust(3, 0, 0);
+        b.lamp(4, 0, 0);                         // output Y0
+        return new Case("nor_gate", "two levers -> block -> torch -> dust -> lamp",
+                b.done(), List.of("A", "B"),
+                env -> !(in(env, "A") || in(env, "B")), "Y0 = NOR(A, B)");
+    }
+
     private static Case orGate() {
         Build b = new Build();
         b.solid(0, 0, 0).solid(0, 0, 2);

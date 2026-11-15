@@ -27,8 +27,6 @@ public final class Equivalence {
         List<String> order = new ArrayList<>(vars);
 
         Set<String> outputs = new LinkedHashSet<>();
-
-        Set<String> outputs = new LinkedHashSet<>();
         for (Netlist.Element e : a.netlist().outputs()) {
             outputs.add(e.label);
         }
@@ -66,7 +64,7 @@ public final class Equivalence {
         return new Result(same, lines);
     }
 
-    private static TruthTable aligned(RedstoneLogicMapper m, String label, List<string> order) {
+    private static TruthTable aligned(RedstoneLogicMapper m, String label, List<String> order) {
         Netlist.Element target = null;
         for (Netlist.Element e : m.netlist().outputs()) {
             if (e.label.equals(label)) {

@@ -142,6 +142,27 @@ public final class TimingAnalysis {
         return order;
     }
 
+    /** When this element's output can first and last change, in ticks. */
+    public Arrival arrivalAt(int elementId) {
+        return arrival[elementId];
+    }
+
+    /** Gates whose inputs arrive on different ticks, plus any feedback note. */
+    public List<String> warnings() {
+        return warnings;
+    }
+
+    /** The slowest output, in redstone ticks. */
+    public int criticalPathTicks() {
+        int worst = 0;
+        for (Netlist.Element out : netlist.outputs()) {
+            if (timed[out.id]) {
+                worst = Math.max(worst, arrival[out.id].latest());
+            }
+        }
+        return worst;
+    }
+
     public List<Integer> criticalPath() {
         int end = -1;
         int worst = -1;
