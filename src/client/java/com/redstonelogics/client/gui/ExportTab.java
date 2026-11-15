@@ -7,6 +7,7 @@ import com.redstonelogics.export.ArduinoExporter;
 import com.redstonelogics.export.CsvExporter;
 import com.redstonelogics.export.DiagramPainter;
 import com.redstonelogics.export.DotExporter;
+import com.redstonelogics.export.KiCadExporter;
 import com.redstonelogics.export.NetlistReport;
 import com.redstonelogics.export.PngExporter;
 import com.redstonelogics.export.SvgExporter;
@@ -58,7 +59,8 @@ public class ExportTab implements CircuitScreen.Tab {
 
         by += bh + 4;
         screen.addButton(button("Report", col0, by, bw, bh, "md"));
-        screen.addButton(button("Everything", col0 + bw + 4, by, bw, bh, "all"));
+        screen.addButton(button("KiCad", col0 + bw + 4, by, bw, bh, "net"));
+        screen.addButton(button("Everything", col0 + 2 * (bw + 4), by, bw, bh, "all"));
     }
 
     private Button button(String label, int x, int y, int w, int h, String kind) {
@@ -104,6 +106,11 @@ public class ExportTab implements CircuitScreen.Tab {
             }
             if (all || kind.equals("mmd")) {
                 text(dir.resolve(base + ".mmd"), DotExporter.mermaid(mapped.diagram()));
+                written++;
+            }
+            if (all || kind.equals("net")) {
+                text(dir.resolve(base + ".net"),
+                        KiCadExporter.render(mapped.diagram(), title));
                 written++;
             }
             if (all || kind.equals("csv")) {

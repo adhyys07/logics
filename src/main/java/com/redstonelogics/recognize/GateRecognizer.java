@@ -187,7 +187,7 @@ public final class GateRecognizer {
         for (int[] sink : sinks) {
             Netlist.Element e = netlist.element(sink[0]);
             LogicDiagram.Gate g = diagram.gate(sink[1]);
-            collectAbsorbed(sink[0], g);
+            collectSinkDelay(sink[0], g);
             Fn fn = ba.function(e.id);
             LogicDiagram.Ref ref = emitUnlessFalse(fn, e.pos);
             if (ref != null) {
@@ -296,6 +296,38 @@ public final class GateRecognizer {
             return slot == 0 ? "A" : "B";
         }
         return "";
+    }
+
+    /**
+     * Pulls repeater delay sitting directly behind a sink onto the sink's gate.
+     *
+     * <p>Deliberately narrower than {@link #collectAbsorbed}: it walks back only
+     * through pass-through buffers and stops at anything else. Collecting the
+     * whole non-variable cone would make an output claim the torches that the
+     * synthetic gate in front of it already represents.
+     */
+    private void collectSinkDelay(int sinkId, LogicDiagram.Gate g) {
+        g.elements.add(sinkId);
+        Set<Integer> seen = new LinkedHashSet<>();
+        Deque<Integer> stack = new ArrayDeque<>();
+        for (Netlist.Link l : netlist.element(sinkId).allInputs()) {
+            stack.push(l.from);
+        }
+        while (!stack.isEmpty()) {
+            int id = stack.pop();
+            if (!seen.add(id) || ba.isVariable(id)) {
+                continue;
+            }
+            Netlist.Element e = netlist.element(id);
+            if (e.kind != Netlist.Kind.BUFFER) {
+                continue;
+            }
+            g.delayTicks += e.delay;
+            g.elements.add(id);
+            for (Netlist.Link l : e.allInputs()) {
+                stack.push(l.from);
+            }
+        }
     }
 
     private void collectAbsorbed(int start, LogicDiagram.Gate g) {

@@ -7,6 +7,7 @@ import com.redstonelogics.export.DiagramLayout;
 import com.redstonelogics.export.DiagramPainter;
 import com.redstonelogics.export.DotExporter;
 import com.redstonelogics.export.NetlistReport;
+import com.redstonelogics.export.KiCadExporter;
 import com.redstonelogics.export.PngExporter;
 import com.redstonelogics.export.SvgExporter;
 import com.redstonelogics.export.VerilogExporter;
@@ -88,6 +89,10 @@ public final class DesktopApp extends JFrame {
             () -> DotExporter.dot(mapped.diagram(), title).getBytes(StandardCharsets.UTF_8))));
         file.add(item("Export truth table...", () -> save("csv", "Truth table",
             () -> CsvExporter.render(mapped).getBytes(StandardCharsets.UTF_8))));
+        file.add(item("Export Mermaid...", () -> save("mmd", "Mermaid flowchart",
+            () -> DotExporter.mermaid(mapped.diagram()).getBytes(StandardCharsets.UTF_8))));
+        file.add(item("Export KiCad netlist...", () -> save("net", "KiCad netlist",
+            () -> KiCadExporter.render(mapped.diagram(), title).getBytes(StandardCharsets.UTF_8))));
 
 
         JMenu view = new JMenu("View");

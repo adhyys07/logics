@@ -1,6 +1,7 @@
 package com.redstonelogics;
 
 import com.redstonelogics.analysis.BooleanAbstraction;
+import com.redstonelogics.analysis.TimingAnalysis;
 import com.redstonelogics.analysis.TruthTable;
 import com.redstonelogics.core.BlockKind;
 import com.redstonelogics.core.Direction;
@@ -8,6 +9,7 @@ import com.redstonelogics.core.Pos;
 import com.redstonelogics.core.RegionSnapshot;
 import com.redstonelogics.core.ScannedBlock;
 import com.redstonelogics.export.DiagramPainter;
+import com.redstonelogics.export.KiCadExporter;
 import com.redstonelogics.export.NetlistReport;
 import com.redstonelogics.export.PngExporter;
 import com.redstonelogics.export.SvgExporter;
@@ -20,9 +22,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -45,7 +49,15 @@ public final class SelfTest {
             "not_gate", GateType.NOT,
             "or_gate", GateType.OR,
             "nor_gate", GateType.NOR,
-            "torch_and", GateType.AND);
+            "torch_and", GateType.AND,
+            "sr_latch", GateType.SR_LATCH);
+
+    /**
+     * Circuits checked by recognised structure alone. A latch output is a
+     * function of latch state, not of the declared inputs, so the truth-table
+     * comparison in verify() cannot describe it.
+     */
+    private static final Set<String> STRUCTURAL_ONLY = Set.of("sr_latch");
 
     // ------------------------------------------------------------------ harness
 
@@ -63,7 +75,7 @@ public final class SelfTest {
         Files.createDirectories(OUT);
 
         List<Case> cases = List.of(
-                notGate(), orGate(), norGate(), repeaterDelay(), torchAnd(),
+                notGate(), orGate(), norGate(), srLatch(), repeaterDelay(), torchAnd(),
                 lampBypass(), lampUnderWire());
 
         int failed = 0;
@@ -120,7 +132,7 @@ public final class SelfTest {
             System.out.println("  warn: " + warning);
         }
 
-        boolean ok = verify(mapped, c);
+        boolean ok = STRUCTURAL_ONLY.contains(c.name()) || verify(mapped, c);
 
         GateType wantType = EXPECTED_TYPE.get(c.name());
         if (wantType != null && !mapped.diagram().tally().containsKey(wantType)) {
@@ -132,7 +144,9 @@ public final class SelfTest {
         String title = c.name() + "  " + mapped.summary();
         write(c.name() + ".snapshot.json", c.snapshot().toJson());
         write(c.name() + ".report.md", NetlistReport.render(mapped, title));
-        write(c.name() + ".svg", SvgExporter.render(mapped.diagram(), title));
+        write(c.name() + ".net", KiCadExporter.render(mapped.diagram(), c.name()));
+        write(c.name() + ".svg",
+                SvgExporter.render(mapped.diagram(), title, criticalGates(mapped)));
         Files.write(OUT.resolve(c.name() + ".png"),
                 PngExporter.toBytes(mapped.diagram(), title, DiagramPainter.Palette.LIGHT, 2.0));
 
@@ -198,6 +212,26 @@ public final class SelfTest {
         return ok;
     }
 
+    /**
+     * Gates lying on the slowest path, so the diagram can pick them out.
+     * TimingAnalysis works in netlist elements; gates carry the elements they
+     * absorbed, which is how the two are matched up.
+     */
+    private static Set<Integer> criticalGates(RedstoneLogicMapper mapped) {
+        Set<Integer> hot = new HashSet<>();
+        for (int element : TimingAnalysis.of(mapped.netlist()).criticalPath()) {
+            com.redstonelogics.core.Pos at = mapped.netlist().element(element).pos;
+            for (LogicDiagram.Gate g : mapped.diagram().gates()) {
+                // Synthetic gates from emit() carry no elements, so fall back to
+                // position: they are created at the position they drive.
+                if (g.elements.contains(element) || g.origin.equals(at)) {
+                    hot.add(g.id);
+                }
+            }
+        }
+        return hot;
+    }
+
     private static void write(String file, String body) throws IOException {
         Files.writeString(OUT.resolve(file), body, StandardCharsets.UTF_8);
     }
@@ -230,6 +264,44 @@ public final class SelfTest {
      * inputs into a single torch is the most common multi-input gate in
      * redstone, and it is a NOR.
      */
+    /**
+     * Cross-coupled torch latch with S and R levers.
+     *
+     * <p>Each dust run approaches its target support block head-on. That is
+     * load bearing: by {@code weakPowerTo}/{@code dustPointsTowards} a wire with
+     * a single connection powers the block on its <em>far</em> side, so a run
+     * ending alongside a block never powers it.
+     */
+    private static Case srLatch() {
+        Build b = new Build();
+        b.solid(0, 0, 0);                        // block1, inverted by torch1
+        b.torch(0, 0, 1, Direction.NORTH);
+        b.solid(0, 0, 4);                        // block2, inverted by torch2
+        b.torch(0, 0, 3, Direction.SOUTH);
+        b.lever(0, 1, 0, Direction.DOWN);        // S forces block1 high
+        b.lever(0, 1, 4, Direction.DOWN);        // R forces block2 high
+
+        // torch1 -> block2, approaching from the east along x.
+        for (int[] c : new int[][] { { 1, 1 }, { 2, 1 }, { 2, 2 }, { 2, 3 }, { 2, 4 }, { 1, 4 } }) {
+            b.solid(c[0], -1, c[1]);
+            b.dust(c[0], 0, c[1]);
+        }
+        // torch2 -> block1, approaching from the west along x.
+        for (int[] c : new int[][] { { -1, 3 }, { -2, 3 }, { -2, 2 }, { -2, 1 }, { -2, 0 },
+                { -1, 0 } }) {
+            b.solid(c[0], -1, c[1]);
+            b.dust(c[0], 0, c[1]);
+        }
+        // A tap to read Q, ending head-on into the lamp.
+        b.solid(3, -1, 2);
+        b.dust(3, 0, 2);
+        b.lamp(4, 0, 2);
+
+        return new Case("sr_latch", "cross-coupled torches with S and R levers",
+                b.done(), List.of("A", "B"), env -> false,
+                "SR latch: output follows stored state, not a function of S and R");
+    }
+
     private static Case norGate() {
         Build b = new Build();
         b.solid(0, 0, 0);                        // support block both levers power

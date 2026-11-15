@@ -6,7 +6,9 @@ import com.redstonelogics.recognize.LogicDiagram;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class DiagramLayout {
     public static final double GATE_WIDTH = 64;
@@ -16,6 +18,8 @@ public final class DiagramLayout {
     public static final double ROW_GAP = 26;
     public static final double MARGIN = 28;
     public static final double STUB = 12;
+    /** Vertical spacing between the lanes that carry backwards edges. */
+    public static final double FEEDBACK_LANE_GAP = 8;
 
     public record Node(int gate, int layer, double x, double y, double width, double height) {
         public double centreY() {
@@ -23,7 +27,16 @@ public final class DiagramLayout {
         }
     }
 
-    public record  Wire(LogicDiagram.Ref from, int toGate, int toPin, double[] points) {
+    /**
+     * One routed connection.
+     *
+     * @param channel  which lane the wire turns in, so wires crossing the same
+     *                 column gap do not draw on top of each other
+     * @param feedback true when the edge runs backwards, as it does around a
+     *                 latch or any other cycle; callers draw those differently
+     */
+    public record  Wire(LogicDiagram.Ref from, int toGate, int toPin, double[] points,
+                        int channel, boolean feedback) {
     }
 
 
@@ -43,7 +56,24 @@ public final class DiagramLayout {
         int[] layers = l.assignLayers();
         l.place(layers);
         l.route();
+        // Backwards edges are routed below the gates, so the canvas has to grow
+        // to keep them inside it.
+        int lanes = l.feedbackLanes();
+        if (lanes > 0) {
+            l.height += lanes * FEEDBACK_LANE_GAP + 16;
+        }
         return l;
+    }
+
+    /** How many distinct backwards lanes the routing used. */
+    public int feedbackLanes() {
+        int max = 0;
+        for (Wire w : wires) {
+            if (w.feedback()) {
+                max = Math.max(max, w.channel() + 1);
+            }
+        }
+        return max;
     }
 
     private int[] assignLayers() {
@@ -149,31 +179,72 @@ public final class DiagramLayout {
     }
 
     private void route() {
+        // How many forward wires leave each column, so each gap can fan its
+        // wires across separate lanes instead of stacking them on one midline.
+        Map<Integer, Integer> perGap = new HashMap<>();
+        for (LogicDiagram.Gate g : diagram.gates()) {
+            for (LogicDiagram.Ref from : g.inputs) {
+                if (nodes[from.gate()].layer() < nodes[g.id].layer()) {
+                    perGap.merge(nodes[from.gate()].layer(), 1, Integer::sum);
+                }
+            }
+        }
+
+        Map<Integer, Integer> takenInGap = new HashMap<>();
+        int feedbackLane = 0;
+
         for (LogicDiagram.Gate g : diagram.gates()) {
             for (int pin = 0; pin < g.inputs.size(); pin++) {
-              LogicDiagram.Ref from = g.inputs.get(pin);
+                LogicDiagram.Ref from = g.inputs.get(pin);
                 double[] start = outputPin(from.gate(), from.pin());
                 double[] end = inputPin(g.id, pin);
-                wires.add(new Wire(from, g.id, pin, path(start, end)));
+
+                int gap = nodes[from.gate()].layer();
+                boolean back = gap >= nodes[g.id].layer();
+
+                if (back) {
+                    int lane = feedbackLane++;
+                    wires.add(new Wire(from, g.id, pin, backPath(start, end, lane),
+                            lane, true));
+                } else {
+                    int index = takenInGap.merge(gap, 1, Integer::sum) - 1;
+                    int count = perGap.getOrDefault(gap, 1);
+                    wires.add(new Wire(from, g.id, pin,
+                            forwardPath(start, end, index, count), index, false));
+                }
             }
         }
     }
 
-    private double[] path(double[] start, double[] end) {
+    /**
+     * A forward edge. The turn happens at a lane spread across the gap rather
+     * than always at its midpoint, so parallel wires stay distinguishable.
+     */
+    private double[] forwardPath(double[] start, double[] end, int index, int count) {
         double sx = start[0];
         double sy = start[1];
         double tx = end[0];
         double ty = end[1];
-        if (tx - sx > 2 * STUB) {
-            double mid = (sx + tx) / 2;
-            return new double[] { sx, sy, mid, sy, mid, ty, tx, ty };
+        if (Math.abs(sy - ty) < 0.5) {
+            return new double[] { sx, sy, tx, ty };      // already a straight run
         }
-        double over = MARGIN / 2;
+        double mid = sx + (tx - sx) * (index + 1.0) / (count + 1.0);
+        mid = Math.max(sx + STUB, Math.min(tx - STUB, mid));
+        return new double[] { sx, sy, mid, sy, mid, ty, tx, ty };
+    }
+
+    /** A backwards edge, carried below the gates in a lane of its own. */
+    private double[] backPath(double[] start, double[] end, int lane) {
+        double sx = start[0];
+        double sy = start[1];
+        double tx = end[0];
+        double ty = end[1];
+        double laneY = height + 8 + lane * FEEDBACK_LANE_GAP;
         return new double[] {
                 sx, sy,
                 sx + STUB, sy,
-                sx + STUB, over,
-                tx - STUB, over,
+                sx + STUB, laneY,
+                tx - STUB, laneY,
                 tx - STUB, ty,
                 tx, ty };
     }

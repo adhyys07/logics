@@ -3,6 +3,8 @@ package com.redstonelogics.export;
 import com.redstonelogics.analysis.BooleanAbstraction;
 import com.redstonelogics.analysis.TruthTable;
 import com.redstonelogics.core.BlockKind;
+import com.redstonelogics.analysis.DeadLogic;
+import com.redstonelogics.analysis.TimingAnalysis;
 import com.redstonelogics.graph.Netlist;
 import com.redstonelogics.mapper.RedstoneLogicMapper;
 import com.redstonelogics.recognize.GateType;
@@ -113,6 +115,13 @@ public final class NetlistReport {
         for (Map.Entry<GateType, Integer> e : diagram.tally().entrySet()) {
             sb.append("- ").append(e.getKey().shortName).append(": ").append(e.getValue()).append('\n');
         }
+        sb.append('\n');
+
+        // Timing and dead logic were previously reachable only from the in-game
+        // export; a report that omits them is not a full analysis.
+        sb.append(TimingAnalysis.of(mapped.netlist()).render()).append('\n');
+        sb.append(DeadLogic.render(DeadLogic.of(mapped.netlist())));
+
         return sb.toString();
     }
 
