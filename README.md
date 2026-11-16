@@ -89,18 +89,6 @@ Mermaid · CSV · Arduino sketch · Markdown report · JSON.
 
 ---
 
-## Status
-
-The analysis core is well exercised — the eight circuits above run on every
-build, and the decision diagram and its sum-of-products cover are both verified
-against brute force. **The in-game scanning path has had very little real-world
-use**, so if a result surprises you, suspect the tool first.
-
-Known gaps: quasi-connectivity is modelled from a snapshot, so it can't see the
-block update a real build needs · an observer's pulse is carried as a free input,
-so timing of the pulse isn't modelled · a comparator on a chest becomes a free
-0–15 input · locked repeaters report no fixed function · a cross-coupled latch
-has two stable states and this picks neither · selections cap at 200,000 blocks.
 
 AI was used throughout, reviewed before committing. Licence: **CC0 1.0** —
 public domain.
