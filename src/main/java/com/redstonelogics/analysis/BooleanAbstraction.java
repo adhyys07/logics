@@ -9,11 +9,34 @@ import java.util.Deque;
 import java.util.List;
 
 public final class BooleanAbstraction {
-    public record Fn(int[] vars, TruthTable table) {
+    /**
+     * A recovered boolean function, held either as a full truth table or, when
+     * its support exceeds {@link TruthTable#MAX_VARS}, as a {@link Bdd} node.
+     *
+     * @param vars  netlist element ids backing each variable
+     * @param table the tabulated function, or null when only a BDD is held
+     * @param bdd   the manager owning {@code node}, or null
+     * @param node  the BDD node id, or -1
+     */
+    public record Fn(int[] vars, TruthTable table, Bdd bdd, int node) {
 
-        public static final Fn UNKNOWN = new Fn(null, null);
+        public static final Fn UNKNOWN = new Fn(null, null, null, -1);
+
+        /** The tabulated form, which is what most of the pipeline builds. */
+        public Fn(int[] vars, TruthTable table) {
+            this(vars, table, null, -1);
+        }
 
         public boolean known() {
+            return table != null || bdd != null;
+        }
+
+        /**
+         * Whether a full truth table is available. Anything that renders a sum
+         * of products, indexes rows or minimises needs this: a BDD-only
+         * function is still known, but has to be handled structurally.
+         */
+        public boolean tabulated() {
             return table != null;
         }
     }
@@ -36,6 +59,13 @@ public final class BooleanAbstraction {
         this.cache = new Fn[n];
         this.visiting = new boolean[n];
     }
+
+    /**
+     * Lazily created, and only used once a function outgrows a truth table.
+     * BDD variable indices are netlist element ids, which gives one global
+     * ordering shared by every function without any remapping.
+     */
+    private Bdd bdd;
 
     public static BooleanAbstraction of(Netlist netlist) {
         BooleanAbstraction b = new BooleanAbstraction(netlist);
@@ -189,7 +219,11 @@ public final class BooleanAbstraction {
             case INPUT -> varOf(e.id);
             case CONSTANT -> new Fn(new int[0], TruthTable.constant(0, true));
             case INVERTER -> not(portValue(e, Netlist.PORT_MAIN));
-            case BUFFER, CMP_COMPARE, OUTPUT -> portValue(e, Netlist.PORT_MAIN);
+            // A locked repeater holds its last output, so it has no combinational
+            // function at all. Treating it as transparent silently misreported
+            // every latch built from locked repeaters.
+            case BUFFER -> e.locked ? Fn.UNKNOWN : portValue(e, Netlist.PORT_MAIN);
+            case CMP_COMPARE, OUTPUT -> portValue(e, Netlist.PORT_MAIN);
             case CMP_SUBTRACT -> and(portValue(e, Netlist.PORT_MAIN),
                     not(portValue(e, Netlist.PORT_SIDE)));
         };
@@ -219,7 +253,14 @@ public final class BooleanAbstraction {
     // -------------------------------------------------------------- Fn algebra
 
     private Fn not(Fn a) {
-        return a.known() ? new Fn(a.vars(), a.table().not()) : Fn.UNKNOWN;
+        if (!a.known()) {
+            return Fn.UNKNOWN;
+        }
+        if (!a.tabulated()) {
+            int node = a.bdd().not(a.node());
+            return fromNode(a.bdd(), node);
+        }
+        return new Fn(a.vars(), a.table().not());
     }
 
     private Fn and(Fn a, Fn b) {
@@ -236,13 +277,77 @@ public final class BooleanAbstraction {
         }
         int[] union = union(a.vars(), b.vars());
         if (union.length > TruthTable.MAX_VARS) {
-            notes.add("A signal depends on " + union.length + " distinct sources, past the "
-                    + TruthTable.MAX_VARS + "-variable limit; it is drawn as an opaque block.");
-            return Fn.UNKNOWN;
+            return combineAsBdd(a, b, conjunction, union.length);
         }
         TruthTable ta = a.table().expand(positions(a.vars(), union), union.length);
         TruthTable tb = b.table().expand(positions(b.vars(), union), union.length);
         return new Fn(union, conjunction ? ta.and(tb) : ta.or(tb));
+    }
+
+
+    /**
+     * Combines two functions whose union of inputs is too wide to tabulate.
+     *
+     * <p>A BDD can also show that the result does not really depend on every
+     * input - cancellation is common in adders - so the support is recomputed
+     * afterwards and the function is tabulated after all when it now fits.
+     * Previously any such signal became an opaque block regardless.
+     */
+    private Fn combineAsBdd(Fn a, Fn b, boolean conjunction, int unionSize) {
+        if (bdd == null) {
+            bdd = new Bdd();
+        }
+        int na = toNode(a);
+        int nb = toNode(b);
+        int node = conjunction ? bdd.and(na, nb) : bdd.or(na, nb);
+        Fn out = fromNode(bdd, node);
+        if (out.tabulated()) {
+            notes.add("A signal spanned " + unionSize + " sources, but reduces to "
+                    + out.vars().length + "; recovered via a decision diagram.");
+        } else {
+            notes.add("A signal depends on " + out.vars().length + " distinct sources, past "
+                    + "the " + TruthTable.MAX_VARS + "-variable table limit; held as a "
+                    + "decision diagram of " + bdd.nodeCount(node) + " node(s).");
+        }
+        return out;
+    }
+
+    /** Wraps a BDD node, tabulating it when its true support is small enough. */
+    private static Fn fromNode(Bdd manager, int node) {
+        int[] support = manager.support(node);
+        if (support.length <= TruthTable.MAX_VARS) {
+            return new Fn(support, manager.toTruthTable(node, support), manager, node);
+        }
+        return new Fn(support, null, manager, node);
+    }
+
+    /**
+     * A function as a BDD node. Built from the minimised sum of products rather
+     * than by enumerating rows, so the cost tracks the function's complexity
+     * instead of always being 2^n.
+     */
+    private int toNode(Fn f) {
+        if (!f.tabulated()) {
+            return f.node();
+        }
+        TruthTable t = f.table();
+        int acc = Bdd.ZERO;
+        for (TruthTable.Cube c : t.sop()) {
+            int term = Bdd.ONE;
+            for (int v = 0; v < t.vars; v++) {
+                int bit = 1 << v;
+                if ((c.mask() & bit) != 0) {
+                    continue;                       // a don't-care
+                }
+                int literal = bdd.variable(f.vars()[v]);
+                if ((c.value() & bit) == 0) {
+                    literal = bdd.not(literal);
+                }
+                term = bdd.and(term, literal);
+            }
+            acc = bdd.or(acc, term);
+        }
+        return acc;
     }
 
     private static int[] union(int[] a, int[] b) {

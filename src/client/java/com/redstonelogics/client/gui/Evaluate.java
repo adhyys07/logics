@@ -25,7 +25,7 @@ final class Evaluate {
     static Boolean output(BooleanAbstraction logic, Netlist.Element out,
             List<Netlist.Element> ins, int assignment) {
         BooleanAbstraction.Fn fn = logic.function(out.id);
-        if (!fn.known()) {
+        if (!fn.tabulated()) {
             return null;
         }
         List<String> names = logic.namesFor(fn);

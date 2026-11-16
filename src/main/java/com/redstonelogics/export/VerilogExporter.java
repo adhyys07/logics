@@ -41,7 +41,7 @@ public final class VerilogExporter {
         for (Netlist.Element out : netlist.outputs()) {
             BooleanAbstraction.Fn fn = logic.function(out.id);
             String rhs;
-            if (!fn.known()) {
+            if (!fn.tabulated()) {
                 rhs = "1'bx  // function could not be determined";
             } else {
                 List<String> names = new ArrayList<>();

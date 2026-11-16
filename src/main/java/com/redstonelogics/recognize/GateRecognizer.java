@@ -221,17 +221,16 @@ public final class GateRecognizer {
     }
 
     private LogicDiagram.Ref emitUnlessFalse(Fn fn, Pos origin) {
-        if (fn.known() && fn.table().isConstant() && !fn.table().constantValue()) {
+        if (fn.tabulated() && fn.table().isConstant() && !fn.table().constantValue()) {
             return null;
         }
         return emit(fn, origin);
     }
 
     private LogicDiagram.Ref emit (Fn fn, Pos origin) {
-        if (!fn.known()) {
+        if (!fn.tabulated()) {
             LogicDiagram.Gate g = diagram.add(GateType.GENERIC, "G" + synthetic++, origin);
-            g.note = "Depends on more than " + TruthTable.MAX_VARS
-                    + " independent signals; left untabulated.";
+            g.note = wideNote(fn);
             return new LogicDiagram.Ref(g.id, 0);
         }
         int[] support = fn.table().supportVars();
@@ -252,9 +251,9 @@ public final class GateRecognizer {
     
     private void describe(LogicDiagram.Gate g, Fn fn, Netlist.Element e){
         collectAbsorbed(e.id, g);
-        if (!fn.known()) {
+        if (!fn.tabulated()) {
             g.type = GateType.GENERIC;
-            g.note = "Depends on more than " + TruthTable.MAX_VARS + " independent signals.";
+            g.note = wideNote(fn);
             return;
         }
         int[] support = fn.table().supportVars();
@@ -354,6 +353,21 @@ public final class GateRecognizer {
             }
         }
         g.elements.addAll(seen);
+    }
+
+    /**
+     * Describes a function with no truth table. Since the decision diagram was
+     * added these are no longer simply unknown: the function is recovered, just
+     * too wide to tabulate, and saying so is the difference between "we could
+     * not work this out" and "this genuinely depends on 40 signals".
+     */
+    private static String wideNote(Fn fn) {
+        if (!fn.known()) {
+            return "Function could not be determined.";
+        }
+        return "Depends on " + fn.vars().length + " signals, past the "
+                + TruthTable.MAX_VARS + "-variable table limit; recovered as a "
+                + "decision diagram and drawn as one block.";
     }
 
     private Match match(TruthTable t) {

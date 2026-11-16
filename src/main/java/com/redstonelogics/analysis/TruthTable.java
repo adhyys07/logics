@@ -6,15 +6,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * A complete boolean function of up to {@value #MAX_VARS} variables, stored as a
- * bitset over all 2^n rows.
- *
- * <p>Exhaustive tables rather than expression trees, because gate recognition is
- * then a table comparison instead of a term-rewriting problem: a circuit that
- * computes AND is recognised as AND however it was built. 16 variables is 8 KiB,
- * which is cheap; past that the caller gives up rather than allocating.
- */
 public final class TruthTable {
 
     public static final int MAX_VARS = 16;
@@ -62,6 +53,19 @@ public final class TruthTable {
         for (int r = 0; r < t.rows(); r++) {
             t.set(r, ((r >>> index) & 1) != 0);
         }
+        return t;
+    }
+
+    public static TruthTable of(int vars, boolean[] rows) {
+        TruthTable t = new TruthTable(vars);
+        if (rows.length != t.rows()) {
+            throw new IllegalArgumentException(
+                    "expected " + t.rows() + " rows, got " + rows.length);
+        }
+        for (int r = 0; r < rows.length; r++) {
+            t.set(r, rows[r]);
+        }
+        t.trim();
         return t;
     }
 

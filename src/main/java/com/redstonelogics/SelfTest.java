@@ -12,6 +12,8 @@ import com.redstonelogics.export.DiagramPainter;
 import com.redstonelogics.export.DiagramJsonExporter;
 import com.redstonelogics.export.KiCadExporter;
 import com.redstonelogics.export.LogisimExporter;
+import com.redstonelogics.export.VerilogExporter;
+import com.redstonelogics.export.VerilogTestbench;
 import com.redstonelogics.export.NetlistReport;
 import com.redstonelogics.export.PngExporter;
 import com.redstonelogics.export.SvgExporter;
@@ -149,6 +151,8 @@ public final class SelfTest {
         write(c.name() + ".net", KiCadExporter.render(mapped.diagram(), c.name()));
         write(c.name() + ".graph.json", DiagramJsonExporter.render(mapped, title));
         write(c.name() + ".circ", LogisimExporter.render(mapped.diagram(), title));
+        write(c.name() + "_tb.v", VerilogTestbench.render(mapped, "circuit"));
+        write(c.name() + ".v", VerilogExporter.render(mapped, "circuit"));
         write(c.name() + ".svg",
                 SvgExporter.render(mapped.diagram(), title, criticalGates(mapped)));
         Files.write(OUT.resolve(c.name() + ".png"),
@@ -168,7 +172,7 @@ public final class SelfTest {
         }
         Netlist.Element out = outputs.get(0);
         BooleanAbstraction.Fn fn = logic.function(out.id);
-        if (!fn.known()) {
+        if (!fn.tabulated()) {
             System.out.println("  function for " + out.label + " could not be determined");
             return false;
         }

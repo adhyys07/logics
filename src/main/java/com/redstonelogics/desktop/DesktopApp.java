@@ -8,9 +8,11 @@ import com.redstonelogics.export.DiagramLayout;
 import com.redstonelogics.export.DiagramPainter;
 import com.redstonelogics.export.DotExporter;
 import com.redstonelogics.export.NetlistReport;
+import com.redstonelogics.analysis.Equivalence;
 import com.redstonelogics.export.DiagramJsonExporter;
 import com.redstonelogics.export.KiCadExporter;
 import com.redstonelogics.export.LogisimExporter;
+import com.redstonelogics.export.VerilogTestbench;
 import com.redstonelogics.export.PngExporter;
 import com.redstonelogics.export.SvgExporter;
 import com.redstonelogics.export.VerilogExporter;
@@ -70,6 +72,7 @@ public final class DesktopApp extends JFrame {
 
         JMenu file = new JMenu("File");
         file.add(item("Open snapshot...", this::open));
+        file.add(item("Compare with...", this::compare));
         file.addSeparator();
         file.add(item("Export SVG...", () -> save("svg", "Scalable Vector Graphics",
                 () -> SvgExporter.render(mapped.diagram(), title).getBytes(StandardCharsets.UTF_8))));
@@ -95,6 +98,8 @@ public final class DesktopApp extends JFrame {
             () -> CsvExporter.render(mapped).getBytes(StandardCharsets.UTF_8))));
         file.add(item("Export Mermaid...", () -> save("mmd", "Mermaid flowchart",
             () -> DotExporter.mermaid(mapped.diagram()).getBytes(StandardCharsets.UTF_8))));
+        file.add(item("Export Verilog testbench...", () -> save("v", "Verilog testbench",
+            () -> VerilogTestbench.render(mapped, "circuit").getBytes(StandardCharsets.UTF_8))));
         file.add(item("Export graph JSON...", () -> save("json", "Circuit graph",
             () -> DiagramJsonExporter.render(mapped, title).getBytes(StandardCharsets.UTF_8))));
         file.add(item("Export Logisim...", () -> save("circ", "Logisim circuit",
@@ -127,6 +132,41 @@ public final class DesktopApp extends JFrame {
 
     private DiagramPainter.Palette palette() {
         return dark ? DiagramPainter.Palette.DARK : DiagramPainter.Palette.LIGHT;
+    }
+
+    /**
+     * Compares the open circuit with a second snapshot. The engine for this has
+     * existed for a while with nothing calling it; this is the shortest path to
+     * the workflow it was written for - build a compact version, prove it still
+     * computes the same thing.
+     */
+    private void compare() {
+        if (mapped == null) {
+            JOptionPane.showMessageDialog(this, "Open a circuit first.",
+                    "Nothing to compare", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileFilter(new FileNameExtensionFilter(
+                "Snapshot or schematic (*.json, *.schem)", "json", "schem"));
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        File f = chooser.getSelectedFile();
+        try {
+            RegionSnapshot other = f.getName().toLowerCase(Locale.ROOT).endsWith(".schem")
+                    ? SchematicImporter.read(Files.readAllBytes(f.toPath()), f.getName())
+                    : RegionSnapshot.fromJson(
+                            Files.readString(f.toPath(), StandardCharsets.UTF_8));
+            Equivalence.Result result = Equivalence.compare(
+                    mapped, "open circuit", RedstoneLogicMapper.map(other), f.getName());
+            details.setText(String.join(System.lineSeparator(), result.lines()));
+            details.setCaretPosition(0);
+        } catch (IOException | IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this,
+                    "Could not read that file: " + e.getMessage(),
+                    "Compare failed", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void open() {

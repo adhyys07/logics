@@ -40,7 +40,7 @@ public final class CsvExporter {
 
     private static String valueAt(BooleanAbstraction logic, Netlist.Element out, List<String> ins, int combo) {
         BooleanAbstraction.Fn fn = logic.function(out.id);
-        if (!fn.known()) {
+        if (!fn.tabulated()) {
             return "x";
         }
         List<String> names = logic.namesFor(fn);

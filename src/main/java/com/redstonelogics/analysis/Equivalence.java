@@ -76,7 +76,7 @@ public final class Equivalence {
             return null;
         }
         BooleanAbstraction.Fn fn = m.logic().function(target.id);
-        if (!fn.known()) {
+        if (!fn.tabulated()) {
             return null;
         }
         List<String> names = m.logic().namesFor(fn);
