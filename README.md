@@ -81,6 +81,9 @@ quickest way to see what the output looks like without starting the game.
 
 ---
 
+## How to Set It up?
+
+
 ## For Transparency
 
 This is early, and the honest version is worth more to you than a tidy one.

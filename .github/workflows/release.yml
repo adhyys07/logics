@@ -1,0 +1,69 @@
+# Builds and publishes a GitHub Release whenever a v* tag is pushed.
+#
+# Separate from build.yml on purpose: that one runs on every push and keeps its
+# jars as throwaway artifacts, which expire. This one runs only on a tag and
+# attaches the jars to a Release, where the download link is permanent.
+#
+# To cut a release:
+#   git tag -a v0.1.0 -m "RedstoneLogics 0.1.0"
+#   git push origin v0.1.0
+#
+# The version in gradle.properties must match the tag, or the jar filename and
+# the release will disagree. The check below fails the build if they do.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write           # needed to create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: setup jdk
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: check the tag matches gradle.properties
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          MOD=$(grep '^version=' gradle.properties | cut -d= -f2)
+          echo "tag=$TAG  gradle.properties=$MOD"
+          if [ "$TAG" != "$MOD" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version=$MOD in gradle.properties"
+            exit 1
+          fi
+
+      # `build` depends on selfTest, so the eight known circuits are checked
+      # before anything is published.
+      - name: build and self-test
+        run: ./gradlew build desktopJar
+
+      - name: list what will be published
+        run: ls -lh build/libs/
+
+      - name: create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "RedstoneLogics ${GITHUB_REF_NAME#v}" \
+            --generate-notes \
+            --prerelease \
+            build/libs/redstonelogics-*.jar

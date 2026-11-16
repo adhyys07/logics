@@ -7,7 +7,11 @@
 	"authors": [
 		"Adhdhyan Jain"
 	],
-	"contact": {},
+	"contact": {
+		"homepage": "https://modrinth.com/mod/redstonelogics",
+		"sources": "https://github.com/adhyys07/logics",
+		"issues": "https://github.com/adhyys07/logics/issues"
+	},
 	"license": "CC0-1.0",
 	"icon": "assets/redstonelogics/icon.png",
 	"environment": "*",
