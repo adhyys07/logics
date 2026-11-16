@@ -19,12 +19,35 @@ B ──┘                   critical path: 2 redstone ticks
 
 ---
 
+## Download
+
+**[Download the latest release](https://github.com/adhyys07/logics/releases/latest)**
+&nbsp;·&nbsp;
+[v0.1.0 jar direct](https://github.com/adhyys07/logics/releases/download/v0.1.0/redstonelogics-0.1.0.jar)
+
+You need:
+
+- Minecraft **26.3**
+- [Fabric Loader](https://fabricmc.net/use/) **0.20.1** or newer
+- [Fabric API](https://modrinth.com/mod/fabric-api)
+- Java **25**
+
+Grab `redstonelogics-0.1.0.jar` and put it in your `mods` folder, next to
+Fabric API. Nothing to configure.
+
+> `redstonelogics-0.1.0-desktop.jar` on the same release page is **not a mod** -
+> don't put it in `mods`. It's the standalone viewer, run with
+> `java -jar redstonelogics-0.1.0-desktop.jar`.
+
+A Modrinth listing is coming; for now releases here are the way to get it.
+
+---
+
 ## What You Do
 
-1. Drop the jar in `mods/`, next to Fabric API. Nothing to configure.
-2. Look at any part of a redstone build and press **V**. It follows the
+1. Look at any part of a redstone build and press **V**. It follows the
    wiring outwards and works out where the circuit ends.
-3. Press **K**.
+2. Press **K**.
 
 That's it. No commands, no cheats — the whole analysis runs on your client.
 
@@ -73,8 +96,6 @@ cd redstonelogics
 ./gradlew desktopJar     # the standalone app
 ./gradlew runClient      # launch Minecraft with the mod loaded
 ```
-
-Needs Minecraft 26.3, Fabric Loader 0.20.1+, Fabric API, and Java 25.
 
 `selfTest` dumps every export format into `build/selftest`, which is the
 quickest way to see what the output looks like without starting the game.
