@@ -1,13 +1,10 @@
 # RedstoneLogics
 
-Point it at a redstone build. It tells you what the circuit *does*.
+A Fabric mod that reads a redstone build and tells you what the circuit *does*.
+It follows the signal through torches, repeaters and comparators, recovers the
+boolean logic, and draws it as a gate diagram with a truth table and timing.
 
-It reads the blocks, follows the signal, and works out the boolean logic
-behind them. You get a gate diagram, a truth table, and the timing.
-
-**You build it → it reads it back.**
-
-It does not build circuits. Only reads them.
+**You build it → it reads it back.** It does not build circuits, only reads them.
 
 ```
 23 blocks  ->  6 components  ->  4 gates
@@ -19,116 +16,91 @@ B ──┘                   critical path: 2 redstone ticks
 
 ---
 
-## Download
+## Setup
 
-**[Download the latest release](https://github.com/adhyys07/logics/releases/latest)**
-&nbsp;·&nbsp;
-[v0.1.0 jar direct](https://github.com/adhyys07/logics/releases/download/v0.1.0/redstonelogics-0.1.0.jar)
+**Requires** Minecraft 26.3 · [Fabric Loader](https://fabricmc.net/use/) 0.20.1+ ·
+[Fabric API](https://modrinth.com/mod/fabric-api) · Java 25
 
-You need:
+1. Download **`redstonelogics-0.1.0.jar`** from
+   **[the latest release](https://github.com/adhyys07/logics/releases/latest)**
+   ([direct link](https://github.com/adhyys07/logics/releases/download/v0.1.0/redstonelogics-0.1.0.jar)).
+2. Put it in your `mods` folder, next to Fabric API. Nothing to configure.
+3. Launch Minecraft, load any world, and look at a redstone build.
+4. Press **V** to pick the circuit, then **K** to open the analyser.
 
-- Minecraft **26.3**
-- [Fabric Loader](https://fabricmc.net/use/) **0.20.1** or newer
-- [Fabric API](https://modrinth.com/mod/fabric-api)
-- Java **25**
+> The `-desktop.jar` on the same page is **not a mod** — don't put it in `mods`.
+> It's a standalone viewer: `java -jar redstonelogics-0.1.0-desktop.jar`.
 
-Grab `redstonelogics-0.1.0.jar` and put it in your `mods` folder, next to
-Fabric API. Nothing to configure.
+The analyser has five tabs: **Diagram** (click a gate, the real blocks light up
+in the world), **Simulate**, **Tables** (truth table + timing), **Compare**
+against a circuit you saved earlier, and **Export**.
 
-> `redstonelogics-0.1.0-desktop.jar` on the same release page is **not a mod** -
-> don't put it in `mods`. It's the standalone viewer, run with
-> `java -jar redstonelogics-0.1.0-desktop.jar`.
-
-A Modrinth listing is coming; for now releases here are the way to get it.
-
----
-
-## What You Do
-
-1. Look at any part of a redstone build and press **V**. It follows the
-   wiring outwards and works out where the circuit ends.
-2. Press **K**.
-
-That's it. No commands, no cheats — the whole analysis runs on your client.
-
-Five pages: the **diagram** (click a gate, the real blocks light up),
-a **simulator**, the **tables and timing**, **compare** against a circuit you
-saved earlier, and **export**.
-
-If you'd rather type, and have cheats on: `/rlogic pos1`, `pos2`, `scan`,
-`export all`.
+Prefer commands? With cheats on: `/rlogic pos1`, `pos2`, `scan`, `export all`.
 
 ---
 
-## What It Knows
+## For reviewers: verify it in one command
+
+No Minecraft needed. This builds eight known circuits in memory and checks each
+recovered function against its expected logic:
+
+```bash
+git clone https://github.com/adhyys07/logics
+cd logics
+./gradlew selfTest
+```
+
+Expected last line:
+
+```
+8/8 circuits matched their expected logic
+```
+
+It also writes every export format for all eight circuits to `build/selftest`
+(72 files) — open `torch_and.svg` or `sr_latch.report.md` to see the real
+output without launching the game.
+
+Other tasks:
+
+```bash
+./gradlew build        # the mod jar, in build/libs (runs selfTest too)
+./gradlew runClient    # launch Minecraft with the mod loaded
+./gradlew desktopJar   # the standalone viewer
+```
+
+---
+
+## What it recognises
 
 NOT · AND · OR · NAND · NOR · XOR · XNOR · INHIBIT · buffers · delays · SR latches
 
-…and, structurally: full adder · half adder · 2:1 mux · gated latch. On a big
-build those collapse into one box each, so a row of adders reads as a row of
-adders rather than a wall of gates.
+Structurally: full adder · half adder · 2:1 mux · gated latch — collapsed into
+one box each on large builds.
 
 Torches are NOT gates. Repeaters are delays and keep their tick count.
 Comparators are comparison or subtraction, including ones reading a chest.
-Observers are edge detectors. Levers and buttons are inputs. Anything it can't
-name is still drawn, with its expression written underneath — wide signals
-included, since those go through a decision diagram instead of a truth table.
+Observers are edge detectors. Anything it can't name is still drawn with its
+minimised expression underneath; signals too wide for a truth table go through
+a decision diagram instead.
 
-## Exports
-
-SVG · PNG · Verilog (+ testbench) · KiCad netlist · Logisim · Graphviz ·
-Mermaid · CSV · Arduino sketch · Markdown report · JSON
-
-Written to `<game folder>/redstonelogics/`.
-
-There's also a desktop app for looking at circuits away from the game, and
-`webapp/index.html`, a single static page you can drop an export onto. Both
-read `.rlogic.json` snapshots, Sponge `.schem`, and Litematica `.litematic`.
+**Exports:** SVG · PNG · Verilog (+ testbench) · KiCad · Logisim · Graphviz ·
+Mermaid · CSV · Arduino sketch · Markdown report · JSON.
+**Imports:** `.rlogic.json` snapshots, Sponge `.schem`, Litematica `.litematic`.
 
 ---
 
-## 🛠 Running Locally
+## Status
 
-```bash
-git clone https://github.com/<your-repo>/redstonelogics
-cd redstonelogics
-./gradlew build          # the mod jar, in build/libs; runs selfTest too
-./gradlew desktopJar     # the standalone app
-./gradlew runClient      # launch Minecraft with the mod loaded
-```
+The analysis core is well exercised — the eight circuits above run on every
+build, and the decision diagram and its sum-of-products cover are both verified
+against brute force. **The in-game scanning path has had very little real-world
+use**, so if a result surprises you, suspect the tool first.
 
-`selfTest` dumps every export format into `build/selftest`, which is the
-quickest way to see what the output looks like without starting the game.
+Known gaps: quasi-connectivity is modelled from a snapshot, so it can't see the
+block update a real build needs · an observer's pulse is carried as a free input,
+so timing of the pulse isn't modelled · a comparator on a chest becomes a free
+0–15 input · locked repeaters report no fixed function · a cross-coupled latch
+has two stable states and this picks neither · selections cap at 200,000 blocks.
 
----
-
-## How to Set It up?
-
-
-## For Transparency
-
-This is early, and the honest version is worth more to you than a tidy one.
-
-The analysis core is well exercised: eight known circuits are checked against
-their expected logic on every build, and the decision diagram and its
-sum-of-products cover are both verified against brute force. **The in-game
-scanning path has had very little real-world use.** If a result surprises you,
-suspect the tool first.
-
-Known gaps:
-
-- **Observers** pulse correctly in the simulator, but the diagram carries the
-  pulse as a free input — it shows what you do with the pulse, not when it
-  arrives.
-- **Quasi-connectivity** is modelled from a snapshot. A real build only acts
-  on it when a block update arrives, and one snapshot can't see that.
-- **Comparators reading containers** become a free 0–15 input. It can't know
-  what's in the chest.
-- **Locked repeaters** are reported as having no fixed function. Honest, not
-  useful.
-- A cross-coupled latch has two stable states and this picks neither.
-- **Litematica import** is round-tripped against our own writer, not yet
-  against a file saved by Litematica itself.
-- Selections cap at 200,000 blocks.
-
-AI was used throughout, reviewed before committing.
+AI was used throughout, reviewed before committing. Licence: **CC0 1.0** —
+public domain.
