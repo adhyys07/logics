@@ -1,6 +1,7 @@
 plugins {
 	id 'net.fabricmc.fabric-loom' version "${loom_version}"
 	id 'maven-publish'
+	id 'com.modrinth.minotaur' version '2.10.0'
 }
 
 repositories {
@@ -105,3 +106,41 @@ tasks.register('desktopJar', Jar) {
 }
 
 check.dependsOn selfTest
+
+// Publishes a version to an EXISTING Modrinth project: ./gradlew modrinth
+//
+// Minotaur cannot create the project itself, only add versions to one that is
+// already there, so the project has to be made once in the web UI and its slug
+// put in modrinth_project_id below.
+//
+// The token is read from the environment on purpose. gradle.properties is in
+// the repository, so a token placed there would be published with the next
+// commit.
+modrinth {
+	token = providers.environmentVariable('MODRINTH_TOKEN')
+	projectId = project.findProperty('modrinth_project_id') ?: 'redstonelogics'
+	versionNumber = project.version
+	versionName = "RedstoneLogics ${project.version}"
+	// Beta, not release: the analysis core is well tested but the in-game
+	// scanning path is not. The channel should say the same thing the README
+	// and the GitHub pre-release flag say.
+	versionType = 'beta'
+	uploadFile = tasks.named('jar')
+	additionalFiles = [tasks.named('sourcesJar')]
+	gameVersions = [project.minecraft_version]
+	loaders = ['fabric']
+	changelog = providers.provider {
+		def notes = file('CHANGELOG.md')
+		notes.exists() ? notes.text
+				: "See https://github.com/adhyys07/logics/releases/tag/v${project.version}"
+	}
+	dependencies {
+		required.project 'fabric-api'
+	}
+}
+
+// The desktop jar is not a mod and must never be uploaded as one: a launcher
+// that installs every file on a version would drop it into mods/.
+tasks.named('modrinth') {
+	mustRunAfter tasks.named('build')
+}
