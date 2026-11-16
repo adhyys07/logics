@@ -33,6 +33,10 @@ public final class LogicDiagram {
         public String note;
         /** Redstone ticks of delay folded into this gate. */
         public int delayTicks;
+        /** For a MACRO gate: the pattern name, e.g. "full adder". */
+        public String macroName;
+        /** For a MACRO gate: the gates it replaced, for drill-down. */
+        public LogicDiagram macro;
 
         Gate(int id, GateType type, String label, Pos origin) {
             this.id = id;

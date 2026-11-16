@@ -47,7 +47,8 @@ public final class StrengthSets {
     private int compute(Netlist.Element e) {
         return switch (e.kind) {
             case INPUT, CONSTANT -> sets[e.id];
-            case INVERTER, BUFFER -> FULL;
+            // An observer pulses at full strength, like a torch.
+            case INVERTER, BUFFER, EDGE -> FULL;
             case CMP_COMPARE -> compare(e);
             case CMP_SUBTRACT -> subtract(e);
             case OUTPUT -> arriving(e.main());

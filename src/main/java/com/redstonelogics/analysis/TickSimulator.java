@@ -13,6 +13,10 @@ public final class TickSimulator {
     private final int[] out;
     private final int[] pending;
     private final long[] dueAt;
+    /** Last value each observer saw at the block it watches. */
+    private final boolean[] watched;
+    /** Tick at which each observer's pulse ends. */
+    private final long[] pulseUntil;
     private final Map<Integer, Boolean> driven = new LinkedHashMap<>();
     private long tick;
 
@@ -27,6 +31,8 @@ public final class TickSimulator {
         this.out = new int[n];
         this.pending = new int[n];
         this.dueAt = new long[n];
+        this.watched = new boolean[n];
+        this.pulseUntil = new long[n];
         for (Netlist.Element e : netlist.inputs()) {
             driven.put(e.id, Boolean.FALSE);
         }
@@ -123,6 +129,9 @@ public final class TickSimulator {
             case INVERTER -> 1;
             case BUFFER -> Math.max(1, e.delay);
             case CMP_COMPARE, CMP_SUBTRACT -> 1;
+            // The pulse length lives in pulseUntil; this is only the lag before
+            // the observer reacts at all.
+            case EDGE -> 1;
             case INPUT, CONSTANT, OUTPUT -> 0;
         };
     }
@@ -144,6 +153,16 @@ public final class TickSimulator {
             }
             case CMP_SUBTRACT:
                 return Math.max(0, arriving(e.main()) - arriving(e.side()));
+            case EDGE: {
+                // An observer fires on any change to the block it watches, in
+                // both directions, and holds for two redstone ticks.
+                boolean now = arriving(e.main()) > 0;
+                if (now != watched[e.id]) {
+                    watched[e.id] = now;
+                    pulseUntil[e.id] = tick + 2;
+                }
+                return tick < pulseUntil[e.id] ? 15 : 0;
+            }
             case OUTPUT:
                 return arriving(e.main());
             default:

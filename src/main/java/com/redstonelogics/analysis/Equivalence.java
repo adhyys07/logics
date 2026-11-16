@@ -40,8 +40,16 @@ public final class Equivalence {
             TruthTable tb = aligned(b, label, order);
 
             if (ta == null || tb == null) {
-                lines.add(label + ": present in only one circuit ("
-                        + (ta != null ? nameA : nameB) + ")");
+                // A missing table means one of two very different things, and
+                // reporting the wrong one sent people looking for a gate that
+                // was there all along.
+                boolean tooWide = (ta == null && hasOutput(a, label))
+                        || (tb == null && hasOutput(b, label));
+                lines.add(label + (tooWide
+                        ? ": too wide to compare by truth table (over "
+                                + TruthTable.MAX_VARS + " inputs)"
+                        : ": present in only one circuit ("
+                                + (ta != null ? nameA : nameB) + ")"));
                 same = false;
                 continue;
             }
@@ -62,6 +70,15 @@ public final class Equivalence {
                 + nameB + " (" + b.snapshot().size() + " blocks, "
                 + b.diagram().gates().size() + " gates)");
         return new Result(same, lines);
+    }
+
+    private static boolean hasOutput(RedstoneLogicMapper m, String label) {
+        for (Netlist.Element e : m.netlist().outputs()) {
+            if (e.label.equals(label)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static TruthTable aligned(RedstoneLogicMapper m, String label, List<String> order) {

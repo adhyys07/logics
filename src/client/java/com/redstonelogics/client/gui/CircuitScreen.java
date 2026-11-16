@@ -15,8 +15,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The in-game analyser. Four pages over one analysis: the diagram, an
- * interactive simulator, the truth table with timing, and the exports.
+ * The in-game analyser. Five pages over one analysis: the diagram, an
+ * interactive simulator, the truth table with timing, a comparison against a
+ * saved circuit, and the exports.
  */
 public class CircuitScreen extends Screen {
 
@@ -70,6 +71,7 @@ public class CircuitScreen extends Screen {
         tabs.add(new DiagramTab());
         tabs.add(new SimulatorTab());
         tabs.add(new TablesTab());
+        tabs.add(new CompareTab());
         tabs.add(new ExportTab());
     }
 

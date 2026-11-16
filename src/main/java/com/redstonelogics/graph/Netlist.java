@@ -36,6 +36,8 @@ public final class Netlist {
         CMP_COMPARE,
         /** Comparator in subtract mode: max(0, back - side). */
         CMP_SUBTRACT,
+        /** Observer: pulses on a change to the block it watches. */
+        EDGE,
         /** Lamp, piston, door: a sink worth drawing. */
         OUTPUT;
 

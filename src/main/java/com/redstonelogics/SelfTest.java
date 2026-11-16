@@ -156,7 +156,8 @@ public final class SelfTest {
         write(c.name() + ".svg",
                 SvgExporter.render(mapped.diagram(), title, criticalGates(mapped)));
         Files.write(OUT.resolve(c.name() + ".png"),
-                PngExporter.toBytes(mapped.diagram(), title, DiagramPainter.Palette.LIGHT, 2.0));
+                PngExporter.toBytes(mapped.diagram(), title, DiagramPainter.Palette.LIGHT,
+                        2.0, criticalGates(mapped)));
 
         System.out.println("  " + (ok ? "PASS" : "FAIL"));
         return ok;
@@ -226,18 +227,7 @@ public final class SelfTest {
      * absorbed, which is how the two are matched up.
      */
     private static Set<Integer> criticalGates(RedstoneLogicMapper mapped) {
-        Set<Integer> hot = new HashSet<>();
-        for (int element : TimingAnalysis.of(mapped.netlist()).criticalPath()) {
-            com.redstonelogics.core.Pos at = mapped.netlist().element(element).pos;
-            for (LogicDiagram.Gate g : mapped.diagram().gates()) {
-                // Synthetic gates from emit() carry no elements, so fall back to
-                // position: they are created at the position they drive.
-                if (g.elements.contains(element) || g.origin.equals(at)) {
-                    hot.add(g.id);
-                }
-            }
-        }
-        return hot;
+        return com.redstonelogics.export.CriticalPath.gates(mapped);
     }
 
     private static void write(String file, String body) throws IOException {

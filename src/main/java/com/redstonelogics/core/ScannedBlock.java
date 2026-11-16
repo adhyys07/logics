@@ -68,6 +68,34 @@ public record ScannedBlock(
                 "minecraft:stone_button");
     }
 
+    /** @param watching the direction the observer looks; output leaves the back. */
+    public static ScannedBlock observer(Direction watching, boolean powered) {
+        return new ScannedBlock(BlockKind.OBSERVER, watching, powered, powered ? 15 : 0,
+                1, false, false, "minecraft:observer");
+    }
+
+    public static ScannedBlock container(String id) {
+        return of(BlockKind.CONTAINER, id);
+    }
+
+    /** Where an observer's pulse comes out. */
+    public Pos observerOutput(Pos self) {
+        return self.offset(facing.opposite());
+    }
+
+    /**
+     * Blocks that also fire when the block above them is powered, with no
+     * connection of any kind. A snapshot can only report that the condition
+     * holds, not that a block update arrived to act on it.
+     */
+    public boolean quasiConnectible() {
+        return switch (blockId) {
+            case "minecraft:piston", "minecraft:sticky_piston", "minecraft:dispenser",
+                 "minecraft:dropper" -> true;
+            default -> false;
+        };
+    }
+
     /** The block this component is mounted on, for torches, levers and buttons. */
     public Pos support(Pos self) {
         return self.offset(facing);

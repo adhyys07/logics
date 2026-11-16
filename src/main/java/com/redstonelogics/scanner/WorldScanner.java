@@ -117,6 +117,19 @@ public final class WorldScanner {
             return ScannedBlock.of(BlockKind.LAMP, id);
         }
 
+        if (state.is(Blocks.OBSERVER)) {
+            // FACING, not HORIZONTAL_FACING: an observer can look up or down,
+            // and it is the direction it watches. The pulse leaves the back.
+            Direction watching = convert(state.getValue(BlockStateProperties.FACING));
+            boolean powered = state.hasProperty(BlockStateProperties.POWERED)
+                    && state.getValue(BlockStateProperties.POWERED);
+            return ScannedBlock.observer(watching, powered);
+        }
+
+        if (isContainer(state)) {
+            return ScannedBlock.container(id);
+        }
+
         if (isMechanism(state)) {
             return ScannedBlock.of(BlockKind.MECHANISM, id);
         }
@@ -129,11 +142,27 @@ public final class WorldScanner {
 
     private static boolean isMechanism(BlockState state){
         return state.is(Blocks.PISTON) || state.is(Blocks.STICKY_PISTON)
-                || state.is(Blocks.DISPENSER) || state.is(Blocks.DROPPER)
-                || state.is(Blocks.NOTE_BLOCK) || state.is(Blocks.OBSERVER)
-                || state.is(Blocks.TNT) || state.is(Blocks.HOPPER)
+                || state.is(Blocks.NOTE_BLOCK) || state.is(Blocks.TNT)
                 || state.is(BlockTags.DOORS) || state.is(BlockTags.TRAPDOORS)
                 || state.is(BlockTags.FENCE_GATES);
+    }
+
+    /**
+     * Blocks a comparator can read a fill level from.
+     *
+     * <p>Dispensers, droppers and hoppers are mechanisms too, but container
+     * wins: a comparator pointed at one is reading it, not driving it, and
+     * nothing is lost because a sink with no comparator on it is dropped.
+     */
+    private static boolean isContainer(BlockState state){
+        return state.is(Blocks.CHEST) || state.is(Blocks.TRAPPED_CHEST)
+                || state.is(Blocks.BARREL) || state.is(Blocks.HOPPER)
+                || state.is(Blocks.DISPENSER) || state.is(Blocks.DROPPER)
+                || state.is(Blocks.FURNACE) || state.is(Blocks.BLAST_FURNACE)
+                || state.is(Blocks.SMOKER) || state.is(Blocks.BREWING_STAND)
+                || state.is(Blocks.LECTERN) || state.is(Blocks.JUKEBOX)
+                || state.is(Blocks.COMPOSTER) || state.is(Blocks.CHISELED_BOOKSHELF)
+                || state.is(BlockTags.SHULKER_BOXES);
     }
 
     private static Direction attachment(BlockState state){

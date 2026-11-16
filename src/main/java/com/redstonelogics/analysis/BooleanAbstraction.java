@@ -60,24 +60,22 @@ public final class BooleanAbstraction {
         this.visiting = new boolean[n];
     }
 
-    /**
-     * Lazily created, and only used once a function outgrows a truth table.
-     * BDD variable indices are netlist element ids, which gives one global
-     * ordering shared by every function without any remapping.
-     */
+    private static final int TABULATION_LIMIT = TruthTable.MAX_VARS;
+
     private Bdd bdd;
+    private int widestBdd;
+    private int widestBddNodes;
+    private int reducedFromWidth;
 
     public static BooleanAbstraction of(Netlist netlist) {
         BooleanAbstraction b = new BooleanAbstraction(netlist);
         b.findComponents();
         b.chooseVariables();
         b.evaluateAll();
+        b.noteWideFunctions();
         return b;
     }
 
-    // ------------------------------------------------------- feedback detection
-
-    /** Tarjan's algorithm, iterative so that a large circuit cannot blow the stack. */
     private void findComponents() {
         List<List<Integer>> successors = netlist.consumers();
         int n = successors.size();
@@ -142,8 +140,6 @@ public final class BooleanAbstraction {
             }
         }
 
-        // A component holds state if it is a real loop, or a single element that
-        // reads its own output.
         for (List<Integer> group : components) {
             boolean loop = group.size() > 1;
             if (!loop) {
@@ -171,24 +167,17 @@ public final class BooleanAbstraction {
         }
     }
 
-    /**
-     * Picks the cut that every function is expressed over: free inputs, state
-     * nodes, and any node read by more than one consumer. Cutting at fanout
-     * keeps shared signals as distinct wires in the diagram instead of
-     * duplicating the logic behind them into every consumer.
-     */
     private void chooseVariables() {
         int[] fanout = netlist.fanout();
         for (Netlist.Element e : netlist.elements()) {
             variable[e.id] = switch (e.kind) {
-                case INPUT -> true;
+                case INPUT, EDGE -> true;
                 case CONSTANT, OUTPUT -> false;
                 default -> state[e.id] || fanout[e.id] > 1;
             };
         }
     }
 
-    // ------------------------------------------------------------- evaluation
 
     private void evaluateAll() {
         for (Netlist.Element e : netlist.elements()) {
@@ -196,14 +185,11 @@ public final class BooleanAbstraction {
         }
     }
 
-    /** What this element computes, as a function of the variable cut. */
     public Fn function(int id) {
         if (cache[id] != null) {
             return cache[id];
         }
         if (visiting[id]) {
-            // Unreachable while every cycle passes through a state node, but a
-            // wrong answer here would be silent, so fail loudly instead.
             notes.add("Unbroken feedback at " + netlist.element(id).label + "; function abandoned.");
             return Fn.UNKNOWN;
         }
@@ -217,11 +203,15 @@ public final class BooleanAbstraction {
     private Fn compute(Netlist.Element e) {
         return switch (e.kind) {
             case INPUT -> varOf(e.id);
+            // An observer pulse is a transient with no steady-state value, so
+            // it is carried as a free input rather than solved for.
+            case EDGE -> {
+                notes.add(e.label + " is an observer pulse: a 2-tick transient with no "
+                        + "steady-state value, carried as a free input.");
+                yield varOf(e.id);
+            }
             case CONSTANT -> new Fn(new int[0], TruthTable.constant(0, true));
             case INVERTER -> not(portValue(e, Netlist.PORT_MAIN));
-            // A locked repeater holds its last output, so it has no combinational
-            // function at all. Treating it as transparent silently misreported
-            // every latch built from locked repeaters.
             case BUFFER -> e.locked ? Fn.UNKNOWN : portValue(e, Netlist.PORT_MAIN);
             case CMP_COMPARE, OUTPUT -> portValue(e, Netlist.PORT_MAIN);
             case CMP_SUBTRACT -> and(portValue(e, Netlist.PORT_MAIN),
@@ -229,7 +219,6 @@ public final class BooleanAbstraction {
         };
     }
 
-    /** Everything feeding one port merges with OR, because dust takes the maximum. */
     private Fn portValue(Netlist.Element e, int port) {
         List<Netlist.Link> links = e.port(port);
         if (links.isEmpty()) {
@@ -250,7 +239,6 @@ public final class BooleanAbstraction {
         return new Fn(new int[] { id }, TruthTable.variable(1, 0));
     }
 
-    // -------------------------------------------------------------- Fn algebra
 
     private Fn not(Fn a) {
         if (!a.known()) {
@@ -276,7 +264,7 @@ public final class BooleanAbstraction {
             return Fn.UNKNOWN;
         }
         int[] union = union(a.vars(), b.vars());
-        if (union.length > TruthTable.MAX_VARS) {
+        if (union.length > TABULATION_LIMIT) {
             return combineAsBdd(a, b, conjunction, union.length);
         }
         TruthTable ta = a.table().expand(positions(a.vars(), union), union.length);
@@ -284,15 +272,6 @@ public final class BooleanAbstraction {
         return new Fn(union, conjunction ? ta.and(tb) : ta.or(tb));
     }
 
-
-    /**
-     * Combines two functions whose union of inputs is too wide to tabulate.
-     *
-     * <p>A BDD can also show that the result does not really depend on every
-     * input - cancellation is common in adders - so the support is recomputed
-     * afterwards and the function is tabulated after all when it now fits.
-     * Previously any such signal became an opaque block regardless.
-     */
     private Fn combineAsBdd(Fn a, Fn b, boolean conjunction, int unionSize) {
         if (bdd == null) {
             bdd = new Bdd();
@@ -302,30 +281,22 @@ public final class BooleanAbstraction {
         int node = conjunction ? bdd.and(na, nb) : bdd.or(na, nb);
         Fn out = fromNode(bdd, node);
         if (out.tabulated()) {
-            notes.add("A signal spanned " + unionSize + " sources, but reduces to "
-                    + out.vars().length + "; recovered via a decision diagram.");
+            reducedFromWidth = Math.max(reducedFromWidth, unionSize);
         } else {
-            notes.add("A signal depends on " + out.vars().length + " distinct sources, past "
-                    + "the " + TruthTable.MAX_VARS + "-variable table limit; held as a "
-                    + "decision diagram of " + bdd.nodeCount(node) + " node(s).");
+            widestBdd = Math.max(widestBdd, out.vars().length);
+            widestBddNodes = Math.max(widestBddNodes, bdd.nodeCount(node));
         }
         return out;
     }
 
-    /** Wraps a BDD node, tabulating it when its true support is small enough. */
     private static Fn fromNode(Bdd manager, int node) {
         int[] support = manager.support(node);
-        if (support.length <= TruthTable.MAX_VARS) {
+        if (support.length <= TABULATION_LIMIT) {
             return new Fn(support, manager.toTruthTable(node, support), manager, node);
         }
         return new Fn(support, null, manager, node);
     }
 
-    /**
-     * A function as a BDD node. Built from the minimised sum of products rather
-     * than by enumerating rows, so the cost tracks the function's complexity
-     * instead of always being 2^n.
-     */
     private int toNode(Fn f) {
         if (!f.tabulated()) {
             return f.node();
@@ -350,6 +321,20 @@ public final class BooleanAbstraction {
         return acc;
     }
 
+    private void noteWideFunctions() {
+        if (reducedFromWidth > 0) {
+            notes.add("A signal spanned " + reducedFromWidth + " sources but cancels down to "
+                    + "fewer; recovered through a decision diagram rather than being "
+                    + "written off as opaque.");
+        }
+        if (widestBdd > 0) {
+            notes.add("The widest signal depends on " + widestBdd + " distinct sources, past "
+                    + "the " + TABULATION_LIMIT + "-variable table limit; held as a decision "
+                    + "diagram of " + widestBddNodes + " node(s). It is drawn as one block, "
+                    + "but its expression is still recovered and written underneath.");
+        }
+    }
+
     private static int[] union(int[] a, int[] b) {
         int[] merged = new int[a.length + b.length];
         System.arraycopy(a, 0, merged, 0, a.length);
@@ -364,8 +349,8 @@ public final class BooleanAbstraction {
         }
         return out;
     }
+    
 
-    // ---------------------------------------------------------------- accessors
 
     public Netlist netlist() {
         return netlist;
@@ -383,13 +368,38 @@ public final class BooleanAbstraction {
         return components;
     }
 
-    /** The feedback loop this element belongs to, or a single-element list. */
     public List<Integer> componentOf(int id) {
         return components.get(componentOf[id]);
     }
 
     public List<String> notes() {
         return notes;
+    }
+
+    /**
+     * A function's minimised expression, whether it is tabulated or not.
+     *
+     * <p>This is the point of the BDD cover: a signal past the table limit used
+     * to be drawn as an unexplained block.
+     */
+    public String expressionOf(Fn fn) {
+        if (!fn.known()) {
+            return "unknown";
+        }
+        if (fn.tabulated()) {
+            return fn.table().toExpression(namesFor(fn));
+        }
+        return fn.bdd().toSop(fn.node(), id -> netlist.element(id).label);
+    }
+
+    /** The cover of a function, with cube bits indexed in support order. */
+    public List<TruthTable.Cube> cubesOf(Fn fn) {
+        if (!fn.known()) {
+            return List.of();
+        }
+        return fn.tabulated()
+                ? fn.table().sop()
+                : Cubes.ofNode(fn.bdd(), fn.node(), fn.vars());
     }
 
     /** Display names for a function's variables, in table-variable order. */

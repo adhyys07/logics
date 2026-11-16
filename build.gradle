@@ -103,3 +103,5 @@ tasks.register('desktopJar', Jar) {
 		attributes 'Main-Class': 'com.redstonelogics.desktop.DesktopApp'
 	}
 }
+
+check.dependsOn selfTest

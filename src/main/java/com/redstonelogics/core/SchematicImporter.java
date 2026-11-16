@@ -96,6 +96,8 @@ public final class SchematicImporter {
                         "subtract".equals(props.get("mode")));
             case "minecraft:lever":
                 return ScannedBlock.lever(attachment(props), bool(props, "powered", false));
+            case "minecraft:observer":
+                return ScannedBlock.observer(facing(props), bool(props, "powered", false));
             case "minecraft:redstone_block":
                 return ScannedBlock.of(BlockKind.REDSTONE_BLOCK, id);
             case "minecraft:redstone_lamp":
@@ -110,6 +112,9 @@ public final class SchematicImporter {
         if (id.endsWith("_button")) {
             return ScannedBlock.button(attachment(props), bool(props, "powered", false));
         }
+        if (CONTAINERS.contains(id) || id.endsWith("_shulker_box")) {
+            return ScannedBlock.container(id);
+        }
         if (MECHANISMS.contains(id) || id.endsWith("_door") || id.endsWith("_trapdoor")
                 || id.endsWith("_fence_gate")) {
             return ScannedBlock.of(BlockKind.MECHANISM, id);
@@ -119,8 +124,20 @@ public final class SchematicImporter {
 
     private static final List<String> MECHANISMS = List.of(
             "minecraft:piston", "minecraft:sticky_piston", "minecraft:dispenser",
-            "minecraft:dropper", "minecraft:note_block", "minecraft:observer",
-            "minecraft:tnt", "minecraft:hopper");
+            "minecraft:note_block", "minecraft:tnt");
+
+    /**
+     * Blocks a comparator can read a fill level from. Dispensers, droppers and
+     * hoppers are containers as well as mechanisms; container wins, because a
+     * comparator pointed at one is reading it, not driving it.
+     */
+    private static final List<String> CONTAINERS = List.of(
+            "minecraft:chest", "minecraft:trapped_chest", "minecraft:barrel",
+            "minecraft:hopper", "minecraft:furnace", "minecraft:blast_furnace",
+            "minecraft:smoker", "minecraft:brewing_stand", "minecraft:dispenser",
+            "minecraft:dropper", "minecraft:chiseled_bookshelf", "minecraft:lectern",
+            "minecraft:jukebox", "minecraft:composter", "minecraft:cauldron",
+            "minecraft:crafter", "minecraft:decorated_pot");
 
     private static final List<String> NON_SOLID = List.of(
             "minecraft:glass", "minecraft:glowstone", "minecraft:water",

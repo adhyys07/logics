@@ -1,7 +1,7 @@
 package com.redstonelogics.desktop;
 
 import com.redstonelogics.core.RegionSnapshot;
-import com.redstonelogics.core.SchematicImporter;
+import com.redstonelogics.core.Schematics;
 import com.redstonelogics.export.ArduinoExporter;
 import com.redstonelogics.export.CsvExporter;
 import com.redstonelogics.export.DiagramLayout;
@@ -148,16 +148,14 @@ public final class DesktopApp extends JFrame {
         }
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(new FileNameExtensionFilter(
-                "Snapshot or schematic (*.json, *.schem)", "json", "schem"));
+                "Snapshot or schematic (*.json, *.schem, *.litematic)",
+                "json", "schem", "litematic"));
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
             return;
         }
         File f = chooser.getSelectedFile();
         try {
-            RegionSnapshot other = f.getName().toLowerCase(Locale.ROOT).endsWith(".schem")
-                    ? SchematicImporter.read(Files.readAllBytes(f.toPath()), f.getName())
-                    : RegionSnapshot.fromJson(
-                            Files.readString(f.toPath(), StandardCharsets.UTF_8));
+            RegionSnapshot other = Schematics.read(Files.readAllBytes(f.toPath()), f.getName());
             Equivalence.Result result = Equivalence.compare(
                     mapped, "open circuit", RedstoneLogicMapper.map(other), f.getName());
             details.setText(String.join(System.lineSeparator(), result.lines()));
@@ -172,17 +170,17 @@ public final class DesktopApp extends JFrame {
     private void open() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(new FileNameExtensionFilter(
-                "Snapshot or schematic (*.json, *.schem)", "json", "schem"));
+                "Snapshot or schematic (*.json, *.schem, *.litematic)",
+                "json", "schem", "litematic"));
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
             return;
         }
         File f = chooser.getSelectedFile();
         try {
-            // A .schem is gzipped NBT; a snapshot is our own JSON.
-            RegionSnapshot snapshot = f.getName().toLowerCase(Locale.ROOT).endsWith(".schem")
-                    ? SchematicImporter.read(Files.readAllBytes(f.toPath()), f.getName())
-                    : RegionSnapshot.fromJson(
-                            Files.readString(f.toPath(), StandardCharsets.UTF_8));
+            // Schematics picks the reader: gzipped NBT for .schem and
+            // .litematic, our own JSON for a snapshot.
+            RegionSnapshot snapshot =
+                    Schematics.read(Files.readAllBytes(f.toPath()), f.getName());
             mapped = RedstoneLogicMapper.map(snapshot);
             title = f.getName() + "  " + mapped.summary();
             setTitle("RedstoneLogics - " + f.getName());

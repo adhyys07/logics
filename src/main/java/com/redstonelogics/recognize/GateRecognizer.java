@@ -50,13 +50,19 @@ public final class GateRecognizer {
         r.fillSinks();
         r.detectAnalogEquality();
         r.carryDiagnostics();
+
         // Composite designs last: they are found structurally over the gates
         // the passes above have already identified.
-        for (SubgraphMatcher.Match m : SubgraphMatcher.findAll(
-                r.diagram, GatePattern.library())) {
+        List<SubgraphMatcher.Match> matches =
+                SubgraphMatcher.findAll(r.diagram, GatePattern.library());
+        for (SubgraphMatcher.Match m : matches) {
             r.diagram.recordPattern(m.describe(r.diagram));
         }
-        return r.diagram;
+        // Collapsing is only worth it on a diagram too big to read; on a small
+        // one it would hide the detail the user came to see.
+        return MacroCollapse.worthwhile(r.diagram, matches)
+                ? MacroCollapse.collapse(r.diagram, matches)
+                : r.diagram;
     }
 
     private void placeFixedGates() {
@@ -250,6 +256,10 @@ public final class GateRecognizer {
     }
     
     private void describe(LogicDiagram.Gate g, Fn fn, Netlist.Element e){
+        if (e.kind == Netlist.Kind.EDGE) {
+            describeObserver(g, e);
+            return;
+        }
         collectAbsorbed(e.id, g);
         if (!fn.tabulated()) {
             g.type = GateType.GENERIC;
@@ -264,6 +274,31 @@ public final class GateRecognizer {
             return;
         }
         wire(g, fn, support, fn.table().collapse(support));
+    }
+
+    /**
+     * An observer, drawn as an edge detector reading the block it watches.
+     *
+     * <p>Its own value is a free variable, so the gate carries the trigger as
+     * an input and nothing downstream pretends to know the pulse's timing.
+     */
+    private void describeObserver(LogicDiagram.Gate g, Netlist.Element e) {
+        g.type = GateType.EDGE;
+        g.elements.add(e.id);
+        Fn watched = falseFn();
+        for (Netlist.Link l : e.main()) {
+            watched = ba.or(watched, ba.valueOf(l.from));
+        }
+        LogicDiagram.Ref ref = emitUnlessFalse(watched, e.pos);
+        if (ref != null) {
+            g.addInput(ref, "D");
+        } else {
+            g.note = "Watches a block that nothing in the selection powers. ";
+        }
+        g.note = (g.note == null ? "" : g.note)
+                + "Observer: a 2-tick pulse when its watched block changes. "
+                + "Carried downstream as a free input.";
+        diagram.recordPattern("Edge detector (observer) at " + e.pos);
     }
 
     private void wire(LogicDiagram.Gate g, Fn fn, int[] support, TruthTable table) {
@@ -361,13 +396,14 @@ public final class GateRecognizer {
      * too wide to tabulate, and saying so is the difference between "we could
      * not work this out" and "this genuinely depends on 40 signals".
      */
-    private static String wideNote(Fn fn) {
+    private String wideNote(Fn fn) {
         if (!fn.known()) {
             return "Function could not be determined.";
         }
-        return "Depends on " + fn.vars().length + " signals, past the "
-                + TruthTable.MAX_VARS + "-variable table limit; recovered as a "
-                + "decision diagram and drawn as one block.";
+        // The BDD cover gives a real expression even past the table limit, so a
+        // wide gate no longer has to be an unexplained block.
+        return "Y = " + ba.expressionOf(fn) + "  (" + fn.vars().length
+                + " inputs, held as a decision diagram)";
     }
 
     private Match match(TruthTable t) {

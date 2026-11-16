@@ -27,16 +27,21 @@ public enum BlockKind {
     /** Redstone lamp: a pure sink, drawn as a diagram output. */
     LAMP,
     /** Piston, door, dispenser, note block ... any other sink worth drawing. */
-    MECHANISM;
+    MECHANISM,
+    /** Observer: fires a short pulse out of its back when the block it faces changes. */
+    OBSERVER,
+    /** Chest, barrel, hopper, furnace: a comparator can read its fill level. */
+    CONTAINER;
 
     /** Does this kind act as a driver that other components can read? */
     public boolean isDriver() {
         return this == DUST || this == TORCH || this == REPEATER || this == COMPARATOR
-                || this == LEVER || this == BUTTON || this == REDSTONE_BLOCK;
+                || this == LEVER || this == BUTTON || this == REDSTONE_BLOCK
+                || this == OBSERVER || this == CONTAINER;
     }
 
     /** Does dust form a connection when it sits next to this kind? */
     public boolean dustConnectable() {
-        return this != AIR && this != SOLID;
+        return this != AIR && this != SOLID && this != CONTAINER;
     }
 }

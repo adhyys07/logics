@@ -12,6 +12,7 @@ public final class TimingAnalysis {
             case INVERTER -> 1;                      // a torch takes a tick to flip
             case BUFFER -> Math.max(1, e.delay);     // repeater, 1-4
             case CMP_COMPARE, CMP_SUBTRACT -> 1;
+            case EDGE -> 1;                          // observer, before it fires
             case INPUT, CONSTANT, OUTPUT -> 0;
         };
     }

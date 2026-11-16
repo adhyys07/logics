@@ -233,6 +233,119 @@ public final class Bdd {
         literals.remove(literals.size() - 1);
     }
 
+    /** Interns a node directly. Children must have a higher variable index. */
+    public int node(int variable, int lo, int hi) {
+        return mk(variable, lo, hi);
+    }
+
+    /** One product term: {@code vars[i]} appears, negated when !positive[i]. */
+    public record Term(int[] vars, boolean[] positive) {
+
+        static final Term EMPTY = new Term(new int[0], new boolean[0]);
+
+        Term prefixed(int v, boolean value) {
+            int[] nv = new int[vars.length + 1];
+            boolean[] np = new boolean[positive.length + 1];
+            nv[0] = v;
+            np[0] = value;
+            System.arraycopy(vars, 0, nv, 1, vars.length);
+            System.arraycopy(positive, 0, np, 1, positive.length);
+            return new Term(nv, np);
+        }
+    }
+
+    /** A cover, with the function it covers kept alongside it as a node. */
+    private record Cover(int node, List<Term> terms) {
+    }
+
+    private final Map<Long, Cover> isopCache = new HashMap<>();
+
+    /**
+     * An irredundant sum of products for this node.
+     *
+     * <p>Minato-Morreale: the recursion carries a lower and an upper bound,
+     * {@code L} subset of f subset of {@code U}, and the gap between them is
+     * the freedom a cube has to overlap its neighbours. That overlap is the
+     * whole point - the obvious three-way split into "needs v", "needs not v"
+     * and "needs neither" produces a <em>disjoint</em> cover, which is correct
+     * but renders an n-input OR as n nested terms instead of {@code a OR b OR
+     * c}. Cost tracks the diagram's size, not 2^n.
+     */
+    public List<Term> isop(int n) {
+        return isop(n, n).terms();
+    }
+
+    private Cover isop(int lower, int upper) {
+        if (upper == ONE) {
+            return new Cover(ONE, List.of(Term.EMPTY));
+        }
+        if (lower == ZERO) {
+            return new Cover(ZERO, List.of());
+        }
+        // Past those two cases both bounds are non-terminal: lower cannot be
+        // ONE without upper being ONE, and upper cannot be ZERO without lower
+        // being ZERO.
+        long key = (((long) lower) << 32) | (upper & 0xFFFFFFFFL);
+        Cover hit = isopCache.get(key);
+        if (hit != null) {
+            return hit;
+        }
+
+        int v = Math.min(var(lower), var(upper));
+        int l0 = branch(lower, v, false);
+        int l1 = branch(lower, v, true);
+        int u0 = branch(upper, v, false);
+        int u1 = branch(upper, v, true);
+
+        // What only the v=0 half must cover, and likewise for v=1.
+        Cover c0 = isop(and(l0, not(u1)), u0);
+        Cover c1 = isop(and(l1, not(u0)), u1);
+
+        // Whatever those two left behind needs no literal on v at all.
+        Cover cd = isop(or(and(l0, not(c0.node())), and(l1, not(c1.node()))),
+                and(u0, u1));
+
+        int lit = variable(v);
+        int covered = or(cd.node(),
+                or(and(not(lit), c0.node()), and(lit, c1.node())));
+
+        List<Term> terms = new ArrayList<>(cd.terms());
+        for (Term t : c0.terms()) {
+            terms.add(t.prefixed(v, false));
+        }
+        for (Term t : c1.terms()) {
+            terms.add(t.prefixed(v, true));
+        }
+
+        Cover result = new Cover(covered, List.copyOf(terms));
+        isopCache.put(key, result);
+        return result;
+    }
+
+    /** The cover rendered as an expression, for a function held only as a BDD. */
+    public String toSop(int n, java.util.function.IntFunction<String> name) {
+        List<Term> terms = isop(n);
+        if (terms.isEmpty()) {
+            return "0";
+        }
+        List<String> parts = new ArrayList<>();
+        for (Term t : terms) {
+            if (t.vars().length == 0) {
+                return "1";
+            }
+            List<String> literals = new ArrayList<>();
+            for (int i = 0; i < t.vars().length; i++) {
+                literals.add((t.positive()[i] ? "" : "NOT ")
+                        + name.apply(t.vars()[i]));
+            }
+            parts.add(terms.size() > 1 && literals.size() > 1
+                    ? "(" + String.join(" AND ", literals) + ")"
+                    : String.join(" AND ", literals));
+        }
+        return String.join(" OR ", parts);
+    }
+
+
     public TruthTable toTruthTable(int n, int[] support) {
         if (support.length > TruthTable.MAX_VARS) {
             throw new IllegalArgumentException(

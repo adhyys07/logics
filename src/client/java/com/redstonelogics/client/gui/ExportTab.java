@@ -4,15 +4,18 @@ import com.redstonelogics.analysis.DeadLogic;
 import com.redstonelogics.analysis.TimingAnalysis;
 import com.redstonelogics.client.ClientAnalysis;
 import com.redstonelogics.export.ArduinoExporter;
+import com.redstonelogics.export.CriticalPath;
 import com.redstonelogics.export.CsvExporter;
 import com.redstonelogics.export.DiagramPainter;
 import com.redstonelogics.export.DotExporter;
 import com.redstonelogics.export.DiagramJsonExporter;
 import com.redstonelogics.export.KiCadExporter;
+import com.redstonelogics.export.LogisimExporter;
 import com.redstonelogics.export.NetlistReport;
 import com.redstonelogics.export.PngExporter;
 import com.redstonelogics.export.SvgExporter;
 import com.redstonelogics.export.VerilogExporter;
+import com.redstonelogics.export.VerilogTestbench;
 import com.redstonelogics.mapper.RedstoneLogicMapper;
 
 import net.fabricmc.loader.api.FabricLoader;
@@ -61,8 +64,11 @@ public class ExportTab implements CircuitScreen.Tab {
         by += bh + 4;
         screen.addButton(button("Report", col0, by, bw, bh, "md"));
         screen.addButton(button("KiCad", col0 + bw + 4, by, bw, bh, "net"));
-        screen.addButton(button("Graph JSON", col0 + 2 * (bw + 4), by, bw, bh, "graph"));
-        screen.addButton(button("Everything", col0 + 3 * (bw + 4), by, bw, bh, "all"));
+        screen.addButton(button("Logisim", col0 + 2 * (bw + 4), by, bw, bh, "circ"));
+        screen.addButton(button("Graph JSON", col0 + 3 * (bw + 4), by, bw, bh, "graph"));
+
+        by += bh + 4;
+        screen.addButton(button("Everything", col0, by, bw, bh, "all"));
     }
 
     private Button button(String label, int x, int y, int w, int h, String kind) {
@@ -82,16 +88,19 @@ public class ExportTab implements CircuitScreen.Tab {
         String title = base + "  " + mapped.summary();
         boolean all = "all".equals(kind);
         int written = 0;
+        // Both renderers highlight the critical path now, so they agree.
+        java.util.Set<Integer> hot = CriticalPath.gates(mapped);
 
         try {
             Files.createDirectories(dir);
             if (all || kind.equals("svg")) {
-                text(dir.resolve(base + ".svg"), SvgExporter.render(mapped.diagram(), title));
+                text(dir.resolve(base + ".svg"),
+                        SvgExporter.render(mapped.diagram(), title, hot));
                 written++;
             }
             if (all || kind.equals("png")) {
                 Files.write(dir.resolve(base + ".png"), PngExporter.toBytes(
-                        mapped.diagram(), title, DiagramPainter.Palette.LIGHT, 2.0));
+                        mapped.diagram(), title, DiagramPainter.Palette.LIGHT, 2.0, hot));
                 written++;
             }
             if (all || kind.equals("ino")) {
@@ -100,7 +109,9 @@ public class ExportTab implements CircuitScreen.Tab {
             }
             if (all || kind.equals("v")) {
                 text(dir.resolve(base + ".v"), VerilogExporter.render(mapped, "circuit"));
-                written++;
+                text(dir.resolve(base + "_tb.v"),
+                        VerilogTestbench.render(mapped, "circuit"));
+                written += 2;
             }
             if (all || kind.equals("dot")) {
                 text(dir.resolve(base + ".dot"), DotExporter.dot(mapped.diagram(), title));
@@ -108,6 +119,11 @@ public class ExportTab implements CircuitScreen.Tab {
             }
             if (all || kind.equals("mmd")) {
                 text(dir.resolve(base + ".mmd"), DotExporter.mermaid(mapped.diagram()));
+                written++;
+            }
+            if (all || kind.equals("circ")) {
+                text(dir.resolve(base + ".circ"),
+                        LogisimExporter.render(mapped.diagram(), title));
                 written++;
             }
             if (all || kind.equals("graph")) {

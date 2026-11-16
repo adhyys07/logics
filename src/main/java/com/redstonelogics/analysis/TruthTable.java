@@ -37,7 +37,6 @@ public final class TruthTable {
         }
     }
 
-    // ------------------------------------------------------------ constructors
 
     public static TruthTable constant(int vars, boolean value) {
         TruthTable t = new TruthTable(vars);
@@ -69,15 +68,12 @@ public final class TruthTable {
         return t;
     }
 
-    /** Clears bits past the last row so that equals() stays meaningful. */
     private void trim() {
         int rows = rows();
         if (rows < 64) {
             words[0] &= (1L << rows) - 1;
         }
     }
-
-    // ---------------------------------------------------------------- operators
 
     public TruthTable not() {
         TruthTable r = new TruthTable(vars);
@@ -116,12 +112,6 @@ public final class TruthTable {
         return r;
     }
 
-    // ----------------------------------------------------------------- reshaping
-
-    /**
-     * Widens this table to {@code targetVars} variables. {@code positions[i]} is
-     * the index this table's variable {@code i} takes in the wider table.
-     */
     public TruthTable expand(int[] positions, int targetVars) {
         TruthTable r = new TruthTable(targetVars);
         for (int row = 0; row < r.rows(); row++) {
@@ -136,10 +126,7 @@ public final class TruthTable {
         return r;
     }
 
-    /**
-     * Narrows this table to just {@code keep}, which must contain the whole
-     * support. Variables left out are evaluated at 0.
-     */
+    
     public TruthTable collapse(int[] keep) {
         TruthTable r = new TruthTable(keep.length);
         for (int row = 0; row < r.rows(); row++) {
@@ -154,9 +141,7 @@ public final class TruthTable {
         return r;
     }
 
-    // ------------------------------------------------------------------ support
-
-    /** Bitmask of the variables whose value can change the result. */
+   
     public int supportMask() {
         int mask = 0;
         for (int v = 0; v < vars; v++) {
@@ -190,17 +175,29 @@ public final class TruthTable {
         return get(0);
     }
 
-    // ----------------------------------------------------------- minimised form
 
     /** One product term: {@code mask} bits are don't-cares, {@code value} holds the rest. */
     public record Cube(int value, int mask) {
     }
 
     /**
-     * A minimised sum of products, by Quine-McCluskey with a greedy cover.
-     * Empty list means constant false; a single all-don't-care cube means true.
+     * Above this width the sum of products comes from a decision diagram
+     * instead. Quine-McCluskey is minimal, which is worth having for the small
+     * tables that make up almost every gate, but its cost is independent of how
+     * simple the answer is.
+     */
+    private static final int QM_LIMIT = 9;
+
+    /**
+     * A minimised sum of products. Empty list means constant false; a single
+     * all-don't-care cube means true.
      */
     public List<Cube> sop() {
+        return vars <= QM_LIMIT ? quineMcCluskey() : Cubes.of(this);
+    }
+
+    /** Quine-McCluskey with a greedy cover. Exact, but exponential in vars. */
+    private List<Cube> quineMcCluskey() {
         List<Integer> minterms = new ArrayList<>();
         for (int row = 0; row < rows(); row++) {
             if (get(row)) {
@@ -214,7 +211,6 @@ public final class TruthTable {
             return List.of(new Cube(0, rows() - 1));
         }
 
-        // Repeatedly merge cubes that differ in exactly one fixed bit.
         Set<Cube> current = new LinkedHashSet<>();
         for (int m : minterms) {
             current.add(new Cube(m, 0));
@@ -247,7 +243,6 @@ public final class TruthTable {
             current = merged;
         }
 
-        // Greedy cover: take the prime implicant that explains the most rows left.
         List<Cube> remaining = new ArrayList<>(primes);
         Set<Integer> uncovered = new LinkedHashSet<>(minterms);
         List<Cube> cover = new ArrayList<>();
@@ -314,7 +309,6 @@ public final class TruthTable {
         return String.join(or, terms);
     }
 
-    // ------------------------------------------------------------------ equality
 
     @Override
     public boolean equals(Object o) {

@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
-import com.ibm.icu.impl.locale.LikelySubtags.Data;
 
 public final class Nbt {
     public static final int END = 0;
@@ -43,6 +42,16 @@ public final class Nbt {
         public String string(String name) {
             Object v = values.get(name);
             return v instanceof String s ? s : null;
+        }
+
+        public long[] longs(String name) {
+            Object v = values.get(name);
+            return v instanceof long[] l ? l : null;
+        }
+
+        public int[] ints(String name) {
+            Object v = values.get(name);
+            return v instanceof int[] a ? a : null;
         }
 
         public byte[] bytes(String name) {

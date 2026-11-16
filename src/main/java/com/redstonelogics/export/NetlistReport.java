@@ -212,6 +212,7 @@ public final class NetlistReport {
             case BUFFER -> "repeater (buffer)";
             case CMP_COMPARE -> "comparator, compare";
             case CMP_SUBTRACT -> "comparator, subtract";
+            case EDGE -> "observer (edge detector)";
             case OUTPUT -> "sink";
         };
         return e.locked ? base + ", locked" : base;

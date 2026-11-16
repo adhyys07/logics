@@ -36,8 +36,11 @@ import java.util.Map;
  *       the main known simplification.</li>
  * </ul>
  *
- * <p>Quasi-connectivity, observers and container-reading comparators are out of
- * scope and are reported as warnings by {@link NetlistExtractor} instead.
+ * <p>Observers power the block behind them, containers emit their fill level to
+ * a comparator at their front, and quasi-connectivity is applied to pistons,
+ * dispensers and droppers. All three are reported as warnings by
+ * {@link NetlistExtractor} as well, because a single snapshot cannot see the
+ * block updates a real build needs in order to act on them.
  */
 public final class PowerModel {
 
@@ -73,6 +76,8 @@ public final class PowerModel {
                 case TORCH -> p.up();
                 case REPEATER, COMPARATOR -> p.offset(b.facing());
                 case LEVER, BUTTON -> b.support(p);
+                // An observer's pulse leaves the face opposite the one it watches.
+                case OBSERVER -> p.offset(b.facing().opposite());
                 default -> null;
             };
             if (target != null && snap.at(target).isSolid()) {
@@ -137,6 +142,7 @@ public final class PowerModel {
                     }
                 }
                 case REPEATER, COMPARATOR -> seed(out, p.offset(b.facing()), s);
+                case OBSERVER -> seed(out, p.offset(b.facing().opposite()), 15);
                 case LEVER, BUTTON, REDSTONE_BLOCK -> {
                     for (Direction d : Direction.ALL) {
                         seed(out, p.offset(d), 15);
@@ -235,6 +241,10 @@ public final class PowerModel {
             case BUTTON:
             case REDSTONE_BLOCK:
                 return true;
+            case OBSERVER:
+                // Only the output face connects; the other five are blank.
+                return b.facing() == d;
+            case CONTAINER:
             case LAMP:
             case MECHANISM:
             case SOLID:
@@ -285,6 +295,11 @@ public final class PowerModel {
             case REPEATER, COMPARATOR ->
                     b.facing() == towards.opposite() ? driverOutputs.getOrDefault(n, 0) : 0;
             case TORCH, LEVER, BUTTON, REDSTONE_BLOCK -> driverOutputs.getOrDefault(n, 0);
+            // The observer at n emits towards facing.opposite(); that points back
+            // at us exactly when its facing equals the direction we looked in.
+            case OBSERVER -> b.facing() == towards ? driverOutputs.getOrDefault(n, 0) : 0;
+            // A container's fill level, which a comparator at its front reads.
+            case CONTAINER -> driverOutputs.getOrDefault(n, 0);
             case SOLID -> blockPower(n);
             default -> 0;
         };
@@ -303,7 +318,17 @@ public final class PowerModel {
                 best = Math.max(best, signalInto(p, d));
             }
         }
+        // Quasi-connectivity: a piston, dispenser or dropper also fires when the
+        // block one above it is powered, with nothing joining the two.
+        if (quasiPowered(p)) {
+            best = Math.max(best, 15);
+        }
         return best;
+    }
+
+    /** Whether this position's power depends on quasi-connectivity. */
+    public boolean quasiPowered(Pos p) {
+        return snap.at(p).quasiConnectible() && blockPower(p.up()) > 0;
     }
 
     public RegionSnapshot snapshot() {

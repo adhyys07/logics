@@ -12,7 +12,6 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -52,6 +51,8 @@ public final class NetlistExtractor {
         int repeaterIndex = 0;
         int comparatorIndex = 0;
         int constantIndex = 0;
+        int observerIndex = 0;
+        int fillIndex = 0;
 
         for (Pos p : snap.positions()) {
             ScannedBlock b = snap.at(p);
@@ -82,11 +83,35 @@ public final class NetlistExtractor {
                     e = netlist.add(Netlist.Kind.OUTPUT, p, b.blockId(), 0, false);
                     e.label = "Y" + outputIndex++;
                 }
+                case OBSERVER -> {
+                    e = netlist.add(Netlist.Kind.EDGE, p, b.blockId(), 1, false);
+                    e.label = "O" + observerIndex++;
+                }
+                case CONTAINER -> {
+                    // A container is only a circuit element when something reads
+                    // it; otherwise it is scenery that happens to be in the box.
+                    if (readByComparator(p)) {
+                        e = netlist.add(Netlist.Kind.INPUT, p, b.blockId(), 0, false);
+                        e.label = "F" + fillIndex++;
+                    }
+                }
                 default -> {
                     // Dust and solid blocks are wiring, not elements.
                 }
             }
         }
+    }
+
+    /** Is a comparator reading this container's fill level? */
+    private boolean readByComparator(Pos container) {
+        for (Direction d : Direction.ALL) {
+            Pos n = container.offset(d);
+            ScannedBlock b = snap.at(n);
+            if (b.kind() == BlockKind.COMPARATOR && b.back(n).equals(container)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** A, B, ... Z, A1, B1, ... for input pins. */
@@ -164,6 +189,14 @@ public final class NetlistExtractor {
             }
             case BUFFER, CMP_COMPARE, CMP_SUBTRACT -> model.signalInto(sink.pos, b.facing().opposite());
             case OUTPUT -> model.mechanismPower(sink.pos);
+            case EDGE -> {
+                // An observer fires on any change to the block it watches, so its
+                // trigger is that block's power however the power is delivered.
+                Pos watched = sink.pos.offset(b.facing());
+                yield Math.max(
+                        snap.at(watched).isSolid() ? model.blockPower(watched) : 0,
+                        model.signalInto(sink.pos, b.facing()));
+            }
             default -> 0;
         };
     }
@@ -224,10 +257,25 @@ public final class NetlistExtractor {
             }
         }
 
-        for (Map.Entry<BlockKind, Integer> entry : snap.inventory().entrySet()) {
-            if (entry.getKey() == BlockKind.MECHANISM) {
-                netlist.warn(entry.getValue() + " mechanism block(s) are drawn as plain outputs; "
-                        + "piston, observer and quasi-connectivity behaviour is not simulated.");
+        for (Netlist.Element e : netlist.of(Netlist.Kind.EDGE)) {
+            netlist.warn(e.label + " at " + e.pos + " is an observer. Its steady-state output "
+                    + "is off, so it is drawn as an edge detector and carried as a free "
+                    + "input: the diagram shows what the circuit does with the pulse, not "
+                    + "when the pulse happens.");
+        }
+        for (Netlist.Element e : netlist.inputs()) {
+            if (snap.kindAt(e.pos) == BlockKind.CONTAINER) {
+                netlist.warn(e.label + " at " + e.pos + " is a container read by a comparator. "
+                        + "Its fill level is a free analog input, 0-15; nothing here can know "
+                        + "what is actually inside it.");
+            }
+        }
+        for (Netlist.Element e : netlist.outputs()) {
+            if (snap.at(e.pos).quasiConnectible()) {
+                netlist.warn(e.label + " at " + e.pos + " is quasi-connectible: it also fires "
+                        + "from power one block above it, which is modelled. A real build only "
+                        + "acts on that when a block update arrives, and one snapshot cannot "
+                        + "see block updates.");
             }
         }
     }

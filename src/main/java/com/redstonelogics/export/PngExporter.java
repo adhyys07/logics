@@ -15,13 +15,28 @@ public final class PngExporter {
 
     public static BufferedImage render(LogicDiagram diagram, String caption,
                                        DiagramPainter.Palette palette, double scale) {
+        return render(diagram, caption, palette, scale, java.util.Set.of());
+    }
+
+    public static byte[] toBytes(LogicDiagram diagram, String caption,
+                                 DiagramPainter.Palette palette, double scale,
+                                 java.util.Set<Integer> hotGates) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(render(diagram, caption, palette, scale, hotGates), "png", out);
+        return out.toByteArray();
+    }
+
+    /** @param hotGates gates on the critical path, outlined in the accent colour */
+    public static BufferedImage render(LogicDiagram diagram, String caption,
+                                       DiagramPainter.Palette palette, double scale,
+                                       java.util.Set<Integer> hotGates) {
         DiagramLayout layout = DiagramLayout.of(diagram);
         int w = (int) Math.ceil(Math.max(layout.width(), 320) * scale);
         int h = (int) Math.ceil((Math.max(layout.height(), 160) + 46) * scale);
         BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g2 = image.createGraphics();
         g2.scale(scale, scale);
-        DiagramPainter.paint(g2, layout, palette, caption);
+        DiagramPainter.paint(g2, layout, palette, caption, hotGates);
         g2.dispose();
         return image;
     }

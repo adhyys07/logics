@@ -21,6 +21,10 @@ public enum GateType {
     SR_LATCH("SR", 2),
     /** A feedback loop that is not a recognised latch. */
     FEEDBACK("STATE", -1),
+    /** Observer: pulses on a change to the block it watches. */
+    EDGE("EDGE", 1),
+    /** A recognised composite, drawn as one box with a sub-diagram inside. */
+    MACRO("MACRO", -1),
     /** Matched nothing; carries a minimised expression in its note instead. */
     GENERIC("LOGIC", -1);
 
