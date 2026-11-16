@@ -107,5 +107,4 @@ Known gaps:
   against a file saved by Litematica itself.
 - Selections cap at 200,000 blocks.
 
-AI was used throughout, reviewed before committing. CC0 — public domain, do
-what you like with it.
+AI was used throughout, reviewed before committing.
