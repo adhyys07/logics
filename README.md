@@ -21,6 +21,11 @@ B ──┘                   critical path: 2 redstone ticks
 **Requires** Minecraft 26.3 · [Fabric Loader](https://fabricmc.net/use/) 0.20.1+ ·
 [Fabric API](https://modrinth.com/mod/fabric-api) · Java 25
 
+> Already have Fabric installed? Check the version — this needs loader
+> **0.20.1 or newer**, and an older profile will refuse to start with an
+> "Incompatible mods found" dialog. Re-run the installer and pick 0.20.1,
+> then switch to the new `fabric-loader-0.20.1-26.3` profile in the launcher.
+
 1. Download **`redstonelogics-0.1.0.jar`** from
    **[the latest release](https://github.com/adhyys07/logics/releases/latest)**
    ([direct link](https://github.com/adhyys07/logics/releases/download/v0.1.0/redstonelogics-0.1.0.jar)).
