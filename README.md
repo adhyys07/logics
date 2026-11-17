@@ -119,15 +119,6 @@ blocks it came from highlight in the world.
 **It exports.** **Export → Everything** writes ~14 files to
 `<game folder>/redstonelogics/`. Open the SVG in a browser.
 
-### If something goes wrong
-
-| Symptom | Cause |
-|---|---|
-| "Incompatible mods found", wrong Fabric Loader version | You are on an old loader profile. Redo Route 2 Option B steps 1–2. |
-| Mod missing from the in-game mod list | Fabric API is not in `mods/`. |
-| Keybind category shows as `key.categories.…` | Cosmetic lang-key mismatch; the keys still work. |
-| `./gradlew` fails with an unsupported class version | Not on JDK 25. Check with `java -version`. |
-
 ---
 
 ## What it recognises
