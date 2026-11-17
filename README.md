@@ -140,6 +140,3 @@ Mermaid · CSV · Arduino sketch · Markdown report · JSON.
 
 ---
 
-
-AI was used throughout, reviewed before committing. Licence: **CC0 1.0** —
-public domain.
